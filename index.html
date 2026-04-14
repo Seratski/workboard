@@ -12,7 +12,7 @@
 :root{
   --bg:#1a1a1a;--bg2:#252525;--bg3:#2e2e2e;--bg4:#383838;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--border3:rgba(255,255,255,0.24);
-  --text:#f0f0f0;--text2:#b0b0b0;--text3:#707070;--label:#d8d8d8;
+  --text:#f0f0f0;--text2:#b0b0b0;--text3:#949494;--label:#e8e8e8;
   --accent:#F96700;--accent2:#d45500;
   --accent-glow:rgba(249,103,0,0.15);
   --green:#2ec97e;--amber:#FFE100;--red:#FF3927;--teal:#22c4ac;--purple:#9b7fe8;
@@ -102,6 +102,37 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
 /* TASKS HEADER */
 .tasks-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.view-toggle{display:flex;gap:2px;background:var(--bg3);border-radius:6px;padding:2px;}
+.view-btn{background:transparent;border:none;border-radius:5px;padding:5px 8px;cursor:pointer;color:var(--text3);font-size:13px;transition:all .12s;}
+.view-btn.active{background:var(--bg4);color:var(--label);}
+.view-btn:hover{color:var(--text);}
+
+/* CARD GRID VIEW */
+.tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.task-card-grid{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:6px;min-height:110px;position:relative;}
+.task-card-grid:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 16px rgba(249,103,0,0.12);}
+.task-card-grid.done{opacity:0.38;}
+.card-stripe{position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;}
+.card-stripe-high{background:var(--red);}
+.card-stripe-medium{background:var(--amber);}
+.card-stripe-low{background:var(--green);}
+.card-stripe-none{display:none;}
+.card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.35;padding-top:4px;}
+.task-card-grid.done .card-title{text-decoration:line-through;color:var(--text3);}
+.card-note{font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.card-footer{margin-top:auto;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.card-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:auto;}
+.card-date.overdue{color:var(--red);}
+.card-actions{position:absolute;top:8px;right:8px;display:flex;gap:3px;opacity:0;transition:opacity .12s;}
+.task-card-grid:hover .card-actions{opacity:1;}
+.card-check{position:absolute;top:10px;left:10px;opacity:0;transition:opacity .12s;}
+.task-card-grid:hover .card-check{opacity:1;}
+.card-progress{height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:2px;}
+.card-progress-fill{height:100%;background:var(--green);border-radius:2px;}
+.card-attach-count{font-size:10px;color:var(--text3);}
+.grid-section-label{grid-column:1/-1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--label);display:flex;align-items:center;gap:8px;padding-bottom:2px;}
+.grid-section-line{flex:1;height:1px;background:var(--border2);}
+.grid-section-count{font-size:10px;font-family:var(--mono);color:var(--text3);font-weight:400;}
 .tasks-title{font-size:15px;font-weight:600;color:var(--text);}
 .tasks-count{font-size:12px;color:var(--text3);font-family:var(--mono);}
 .sort-select{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--label);font-family:var(--font);font-size:12px;outline:none;cursor:pointer;}
@@ -475,12 +506,16 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
             <option value="date">📅 Due date</option>
             <option value="created">🕐 Newest first</option>
           </select>
+          <div class="view-toggle">
+            <button class="view-btn active" id="viewList" onclick="setViewMode('list')" title="List view">☰</button>
+            <button class="view-btn" id="viewGrid" onclick="setViewMode('grid')" title="Grid view">⊞</button>
+          </div>
           <div class="search-wrap">
             <span class="search-icon">🔍</span>
             <input id="searchInput" placeholder="Search… (Ctrl+K)" oninput="renderTasks()" />
           </div>
         </div>
-        <div class="tasks" id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ New task" or "📝 Rich task" above.</p></div></div>
+        <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ New task" or "📝 Rich task" above.</p></div></div>
       </div>
     </div>
   </div>
@@ -619,6 +654,7 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore(),auth=firebase.auth();
 
 let tasks=[],sites=['DK','NO','SE','FI','NCS BO','PIAS'],persons=[],projectTasks=[];
+let viewMode='list';
 let fSites=[],fPersons=[],fProjects=[],fActions=[],editingId=null;
 let rSites=[],rPersons=[],rProjects=[],rActions=[],richEditingId=null,richAutoSaveTimer=null;
 let afS=[],afP=[],afT=[],afPr=[];
@@ -715,6 +751,13 @@ function tF(type,val){
 function clearFilters(){afS=[];afP=[];afT=[];afPr=[];renderFilterPanel();renderTasks();}
 
 // ── TASKS ──
+function setViewMode(mode){
+  viewMode=mode;
+  document.getElementById('viewList').classList.toggle('active',mode==='list');
+  document.getElementById('viewGrid').classList.toggle('active',mode==='grid');
+  renderTasks();
+}
+
 function getSorted(arr){
   const sort=(document.getElementById('sortSelect')?.value)||'priority';
   const pMap={high:0,medium:1,low:2,none:3};
@@ -744,16 +787,29 @@ function renderTasks(){
   const f=getSorted(getFiltered('board'));
   document.getElementById('tasksCount').textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
   const el=document.getElementById('taskList');
-  if(!f.length){el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><p>No tasks found.</p></div>';return;}
+  if(!f.length){el.className='';el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><p>No tasks found.</p></div>';return;}
   const sort=(document.getElementById('sortSelect')?.value)||'priority';
-  if(sort==='priority'){
-    const high=f.filter(t=>t.priority==='high'),med=f.filter(t=>t.priority==='medium'),other=f.filter(t=>t.priority!=='high'&&t.priority!=='medium');
-    let h='';
-    if(high.length){h+=divider('🔴 High priority',high.length);h+=high.map(taskHTML).join('');}
-    if(med.length){h+=divider('🟡 Medium priority',med.length);h+=med.map(taskHTML).join('');}
-    if(other.length){if(high.length||med.length)h+=divider('Other',other.length);h+=other.map(taskHTML).join('');}
-    el.innerHTML=h;
-  }else{el.innerHTML=f.map(taskHTML).join('');}
+  if(viewMode==='grid'){
+    el.className='tasks-grid';
+    if(sort==='priority'){
+      const high=f.filter(t=>t.priority==='high'),med=f.filter(t=>t.priority==='medium'),other=f.filter(t=>t.priority!=='high'&&t.priority!=='medium');
+      let h='';
+      if(high.length){h+=gridSection('🔴 High priority',high.length);h+=high.map(taskCardHTML).join('');}
+      if(med.length){h+=gridSection('🟡 Medium priority',med.length);h+=med.map(taskCardHTML).join('');}
+      if(other.length){if(high.length||med.length)h+=gridSection('Other',other.length);h+=other.map(taskCardHTML).join('');}
+      el.innerHTML=h;
+    }else{el.innerHTML=f.map(taskCardHTML).join('');}
+  }else{
+    el.className='tasks';
+    if(sort==='priority'){
+      const high=f.filter(t=>t.priority==='high'),med=f.filter(t=>t.priority==='medium'),other=f.filter(t=>t.priority!=='high'&&t.priority!=='medium');
+      let h='';
+      if(high.length){h+=divider('🔴 High priority',high.length);h+=high.map(taskHTML).join('');}
+      if(med.length){h+=divider('🟡 Medium priority',med.length);h+=med.map(taskHTML).join('');}
+      if(other.length){if(high.length||med.length)h+=divider('Other',other.length);h+=other.map(taskHTML).join('');}
+      el.innerHTML=h;
+    }else{el.innerHTML=f.map(taskHTML).join('');}
+  }
 }
 function renderTodayList(){
   const f=getFiltered('today');
@@ -766,6 +822,37 @@ function renderDoneList(){
   document.getElementById('doneList').innerHTML=f.length?f.map(taskHTML).join(''):'<div class="empty"><div class="empty-icon">✅</div><p>No completed tasks yet.</p></div>';
 }
 function divider(l,count){return '<div class="section-divider"><span class="section-divider-label">'+l+(count!==undefined?' <span class="section-divider-count">('+count+')</span>':'')+'</span><div class="section-divider-line"></div></div>';}
+
+function gridSection(label,count){
+  return '<div class="grid-section-label">'+label+' <span class="grid-section-count">('+count+')</span><div class="grid-section-line"></div></div>';
+}
+
+function taskCardHTML(t){
+  var sc={high:"card-stripe-high",medium:"card-stripe-medium",low:"card-stripe-low",none:"card-stripe-none"}[t.priority||"none"];
+  var tags=(t.sites||[]).map(function(s){return '<span class="itag itag-s">'+escHtml(s)+'</span>';}).join("")
+    +(t.persons||[]).map(function(p){return '<span class="itag itag-p">'+escHtml(p)+'</span>';}).join("")
+    +(t.tags||[]).map(function(g){return '<span class="itag itag-t">'+escHtml(g)+'</span>';}).join("");
+  var actions=t.actions||[];
+  var doneA=actions.filter(function(a){return a.done;}).length;
+  var pct=actions.length?Math.round(doneA/actions.length*100):0;
+  var attachCount=(t.attachments||[]).length;
+  var od=isOverdue(t.date);
+  var dateStr=t.date?'<span class="card-date'+(od?' overdue':'')+'">'+ formatDate(t.date)+(od?' ⚠':'')+'</span>':''  ;
+  var h='<div class="task-card-grid '+(t.done?'done':'')+'" id="tc-'+t.id+'">';
+  h+='<div class="card-stripe '+sc+'"></div>';
+  h+='<div class="card-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="event.stopPropagation();toggleDone(\"'+t.id+'\")"></div></div>';
+  h+='<div class="card-title">'+escHtml(t.title||"(No title)")+'</div>';
+  if(t.note)h+='<div class="card-note">'+escHtml(t.note)+'</div>';
+  h+='<div class="card-footer">'+(tags||'')+dateStr+'</div>';
+  if(actions.length)h+='<div class="card-progress"><div class="card-progress-fill" style="width:'+pct+'%"></div></div>';
+  if(attachCount)h+='<span class="card-attach-count">📎 '+attachCount+'</span>';
+  h+='<div class="card-actions">';
+  if(t.richBody)h+='<button class="ia" onclick="event.stopPropagation();openRichEditor(\"'+t.id+'\")">📝</button>';
+  h+='<button class="ia" onclick="event.stopPropagation();openEdit(\"'+t.id+'\")">✏️</button>';
+  h+='<button class="ia del" onclick="event.stopPropagation();deleteTask(\"'+t.id+'\")">🗑</button>';
+  h+='</div></div>';
+  return h;
+}
 
 function taskHTML(t){
   const sc={high:'stripe-high',medium:'stripe-medium',low:'stripe-low',none:'stripe-none'}[t.priority||'none'];
@@ -804,7 +891,7 @@ function attachHTML(t) {
   return '<div class="task-attachments">'
     + atts.map((a, i) => {
       if (a.type && a.type.startsWith('image/')) {
-        return '<img class="task-attach-img" src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="showTaskAttachLightbox('' + t.id + '',' + i + ')" />';
+        return '<img class="task-attach-img" src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="showTaskAttachLightbox(\"' + t.id + '\",' + i + ')" />';
       }
       return '<a class="task-attach-file" href="' + a.data + '" download="' + escHtml(a.name) + '">📄 ' + escHtml(a.name) + '</a>';
     }).join('')
@@ -1072,13 +1159,13 @@ function renderAttachPreview(target) {
   el.innerHTML = arr.map((a, i) => {
     if (a.type.startsWith('image/')) {
       return '<div class="attach-thumb">'
-        + '<img src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="openLightbox('' + target + '',' + i + ')" />'
-        + '<button class="attach-del" onclick="removeAttach('' + target + '',' + i + ')">✕</button>'
+        return '<div class="attach-thumb"><img src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="openLightbox(\"' + target + '\",' + i + ')" /><button class="attach-del" onclick="removeAttach(\"' + target + '\",' + i + ')">✕</button></div>';
+        return '<div class="attach-thumb is-file">📄 <span class="attach-name">' + escHtml(a.name) + '</span><button class="attach-del" onclick="removeAttach(\"' + target + '\",' + i + ')">✕</button></div>';
         + '</div>';
     } else {
       return '<div class="attach-thumb is-file">'
         + '📄 <span class="attach-name">' + escHtml(a.name) + '</span>'
-        + '<button class="attach-del" onclick="removeAttach('' + target + '',' + i + ')">✕</button>'
+        return '<div class="attach-thumb is-file">📄 <span class="attach-name">' + escHtml(a.name) + '</span><button class="attach-del" onclick="removeAttach(\"' + target + '\",' + i + ')">✕</button></div>';
         + '</div>';
     }
   }).join('');
