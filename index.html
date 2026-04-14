@@ -904,7 +904,7 @@ function taskCardHTML(t){
   var attachCount=(t.attachments||[]).length;
   var od=isOverdue(t.date);
   var dateStr=t.date?'<span class="card-date'+(od?' overdue':'')+'">'+ formatDate(t.date)+(od?' ⚠':'')+'</span>':''  ;
-  var h='<div class="task-card-grid '+(t.done?'done':'')+'" id="tc-'+t.id+'" onclick="openDetail(\"'+t.id+'\")">';
+  var h='<div class="task-card-grid '+(t.done?'done':'')+'" id="tc-'+t.id+'" onclick="openDetail(this)">';
   h+='<div class="card-stripe '+sc+'"></div>';
   h+='<div class="card-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="event.stopPropagation();toggleDone(\"'+t.id+'\")"></div></div>';
   h+='<div class="card-title">'+escHtml(t.title||"(No title)")+'</div>';
@@ -931,7 +931,7 @@ function taskHTML(t){
   const actionBar=actions.length
     ?'<div class="action-progress"><div class="action-progress-bar"><div class="action-progress-fill" style="width:'+pct+'%"></div></div><span class="action-progress-text">'+doneA+'/'+actions.length+' done</span></div>':'';
   const richIcon=t.richBody?'<span style="font-size:10px;color:var(--text3);margin-left:2px">📝</span>':'';
-  return '<div class="task-row-wrap '+(t.done?'done':'')+'" id="tc-'+t.id+'" onclick="openDetail(\"'+t.id+'\")" style="cursor:pointer">'
+  return '<div class="task-row-wrap '+(t.done?'done':'')+' " id="tc-'+t.id+'" onclick="openDetail(this)" style="cursor:pointer">'
     +'<div class="task-stripe '+sc+'"></div>'
     +'<div class="task-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="toggleDone(\''+t.id+'\')"></div></div>'
     +'<div class="task-main">'
@@ -1185,7 +1185,9 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 // ── DETAIL MODAL ──
 let detailTaskId = null;
 
-function openDetail(id) {
+function openDetail(elOrId) {
+  var id = typeof elOrId === 'string' ? elOrId : elOrId.closest('[id^="tc-"]')?.id?.replace('tc-','');
+  if (!id) return;
   const t = tasks.find(x => x.id === id);
   if (!t) return;
   detailTaskId = id;
