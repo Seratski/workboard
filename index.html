@@ -786,7 +786,7 @@ function taskHTML(t){
         +'<span class="task-title">'+escHtml(t.title||'(No title)')+richIcon+'</span>'
         +'<div class="task-meta-inline">'+tags+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'">'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+'</div>'
       +'</div>'
-      +(t.note?'<div class="task-note-row" onclick="this.classList.toggle(\"expanded\")" title="Click to expand">'+escHtml(t.note)+'</div>':'')
+      +(t.note?'<div class="task-note-row" onclick="toggleNote(this)" title="Click to expand">'+escHtml(t.note)+'</div>':'')
       +actionBar
       +attachHTML(t)
     +'</div>'
@@ -822,6 +822,7 @@ function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function formatDate(d){if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
 function isOverdue(d){if(!d)return false;return d<new Date().toISOString().slice(0,10);}
+function toggleNote(el){el.classList.toggle("expanded");}
 async function toggleDone(id){const t=tasks.find(x=>x.id===id);if(!t)return;await db.collection('tasks').doc(id).update({done:!t.done});}
 async function deleteTask(id){if(!confirm('Delete this task?'))return;await db.collection('tasks').doc(id).delete();showToast('Deleted');}
 
