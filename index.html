@@ -123,10 +123,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .card-footer{margin-top:auto;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
 .card-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:auto;}
 .card-date.overdue{color:var(--red);}
-.card-actions{position:absolute;top:8px;right:8px;display:flex;gap:3px;opacity:0;transition:opacity .12s;}
-.task-card-grid:hover .card-actions{opacity:1;}
-.card-check{position:absolute;top:10px;left:10px;opacity:0;transition:opacity .12s;}
-.task-card-grid:hover .card-check{opacity:1;}
+.card-actions{display:none;}
+.card-check{display:none;}
 .card-progress{height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:2px;}
 .card-progress-fill{height:100%;background:var(--green);border-radius:2px;}
 .card-attach-count{font-size:10px;color:var(--text3);}
@@ -195,8 +193,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .itag-s{background:rgba(249,103,0,0.12);color:#f9a060;}
 .itag-p{background:rgba(155,127,232,0.12);color:#b8a0f0;}
 .itag-t{background:rgba(41,201,176,0.12);color:#30d0b8;}
-.task-actions-col{display:flex;align-items:center;gap:2px;padding:0 6px 0 2px;opacity:0;transition:opacity .1s;flex-shrink:0;}
-.task-row-wrap:hover .task-actions-col{opacity:1;}
+.task-actions-col{display:none;}
 .ia{background:transparent;border:none;padding:3px 5px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--text3);font-family:var(--font);transition:all .1s;}
 .ia:hover{background:var(--bg3);color:var(--label);}
 .ia.del:hover{color:var(--red);}
@@ -456,7 +453,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       <div class="chip-grid" id="personChips"></div>
     </div>
     <div class="form-field">
-      <label class="form-label">Project tasks <span class="form-hint">select or type new</span></label>
+      <label class="form-label">Labels <span class="form-hint">select or type new</span></label>
       <div class="chip-grid" id="projectChips"></div>
       <div class="tag-input-wrap" id="projectTagWrap">
         <input class="tag-inline-input" id="projectInput" placeholder="Type new and press Enter…" />
@@ -545,8 +542,12 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
           <span class="tasks-count" id="tasksCount"></span>
           <select class="sort-select" id="sortSelect" onchange="renderTasks()">
             <option value="priority">↕ Priority</option>
-            <option value="date">📅 Due date</option>
+            <option value="date">📅 Due date (nearest)</option>
             <option value="created">🕐 Newest first</option>
+            <option value="oldest">🕑 Oldest first</option>
+            <option value="site">◈ Group by site</option>
+            <option value="person">👤 Group by people</option>
+            <option value="label">🏷 Group by label</option>
           </select>
           <div class="view-toggle">
             <button class="view-btn active" id="viewList" onclick="setViewMode('list')" title="List view">☰</button>
@@ -610,7 +611,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
           <div class="rich-field chip-grid" id="richSiteChips"></div>
           <div class="rich-section-label">People</div>
           <div class="rich-field chip-grid" id="richPersonChips"></div>
-          <div class="rich-section-label">Project tasks</div>
+          <div class="rich-section-label">Labels</div>
           <div class="rich-field">
             <div class="chip-grid" id="richProjectChips"></div>
             <div class="tag-input-wrap" id="richProjectTagWrap" style="margin-top:5px;">
@@ -659,7 +660,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
         <div class="settings-add-row"><input id="newPersonInput" placeholder="Full name" /><button class="btn btn-primary btn-sm" onclick="addPerson()">+ Add</button></div>
       </div>
       <div class="settings-card settings-card-full">
-        <div class="settings-card-title">Project tasks</div>
+        <div class="settings-card-title">Labels</div>
         <div class="settings-card-sub">Saved labels. New labels typed in tasks appear here automatically.</div>
         <div class="settings-list" id="projectSettingsList"></div>
         <div class="settings-add-row"><input id="newProjectInput" placeholder="New label" /><button class="btn btn-primary btn-sm" onclick="addProjectTask()">+ Add</button></div>
@@ -775,7 +776,7 @@ function renderFilterPanel(){
   let h='';
   if(uS.length){h+='<div class="filter-group"><span class="filter-group-label">Sites</span><div class="filter-chips">';uS.forEach(s=>h+='<button class="fchip fs '+(afS.includes(s)?'on':'')+'" onclick="tF(\'s\',\''+esc(s)+'\')">'+s+'</button>');h+='</div></div>';}
   if(uP.length){h+='<div class="filter-group"><span class="filter-group-label">People</span><div class="filter-chips">';uP.forEach(p=>h+='<button class="fchip fp '+(afP.includes(p)?'on':'')+'" onclick="tF(\'p\',\''+esc(p)+'\')">'+p+'</button>');h+='</div></div>';}
-  if(uT.length){h+='<div class="filter-group"><span class="filter-group-label">Projects</span><div class="filter-chips">';uT.forEach(t=>h+='<button class="fchip ft '+(afT.includes(t)?'on':'')+'" onclick="tF(\'t\',\''+esc(t)+'\')">'+t+'</button>');h+='</div></div>';}
+  if(uT.length){h+='<div class="filter-group"><span class="filter-group-label">Labels</span><div class="filter-chips">';uT.forEach(t=>h+='<button class="fchip ft '+(afT.includes(t)?'on':'')+'" onclick="tF(\'t\',\''+esc(t)+'\')">'+t+'</button>');h+='</div></div>';}
   if(uPr.length){
     h+='<div class="filter-group"><span class="filter-group-label">Priority</span><div class="filter-chips">';
     [['high','🔴 High'],['medium','🟡 Medium'],['low','🟢 Low']].filter(v=>uPr.includes(v[0])).forEach(v=>h+='<button class="fchip fpr '+v[0]+' '+(afPr.includes(v[0])?'on':'')+'" onclick="tF(\'pr\',\''+v[0]+'\')">'+v[1]+'</button>');
@@ -805,8 +806,26 @@ function getSorted(arr){
   const pMap={high:0,medium:1,low:2,none:3};
   if(sort==='priority')return [...arr].sort((a,b)=>(pMap[a.priority||'none'])-(pMap[b.priority||'none']));
   if(sort==='date')return [...arr].sort((a,b)=>{if(!a.date&&!b.date)return 0;if(!a.date)return 1;if(!b.date)return -1;return a.date.localeCompare(b.date);});
+  if(sort==='oldest')return [...arr].sort((a,b)=>{const at=a.createdAt?.toMillis?a.createdAt.toMillis():0;const bt=b.createdAt?.toMillis?b.createdAt.toMillis():0;return at-bt;});
   if(sort==='created')return [...arr].sort((a,b)=>{const at=a.createdAt?.toMillis?a.createdAt.toMillis():0;const bt=b.createdAt?.toMillis?b.createdAt.toMillis():0;return bt-at;});
   return arr;
+}
+
+function getGrouped(arr, groupBy) {
+  // Returns [{label, tasks}]
+  const groups = {};
+  const noGroup = [];
+  arr.forEach(t => {
+    const keys = groupBy==='site'?(t.sites||[]):groupBy==='person'?(t.persons||[]):(t.tags||[]);
+    if (!keys.length) { noGroup.push(t); return; }
+    keys.forEach(k => {
+      if (!groups[k]) groups[k] = [];
+      groups[k].push(t);
+    });
+  });
+  const result = Object.keys(groups).sort().map(k => ({label:k, tasks:groups[k]}));
+  if (noGroup.length) result.push({label:'(no '+groupBy+')', tasks:noGroup});
+  return result;
 }
 
 function getFiltered(mode){
@@ -907,7 +926,7 @@ function taskHTML(t){
   const actionBar=actions.length
     ?'<div class="action-progress"><div class="action-progress-bar"><div class="action-progress-fill" style="width:'+pct+'%"></div></div><span class="action-progress-text">'+doneA+'/'+actions.length+' done</span></div>':'';
   const richIcon=t.richBody?'<span style="font-size:10px;color:var(--text3);margin-left:2px">📝</span>':'';
-  return '<div class="task-row-wrap '+(t.done?'done':'')+'" id="tc-'+t.id+'">'
+  return '<div class="task-row-wrap '+(t.done?'done':'')+'" id="tc-'+t.id+'" onclick="openDetail(\"'+t.id+'\")" style="cursor:pointer">'
     +'<div class="task-stripe '+sc+'"></div>'
     +'<div class="task-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="toggleDone(\''+t.id+'\')"></div></div>'
     +'<div class="task-main">'
