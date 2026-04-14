@@ -108,8 +108,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .view-btn:hover{color:var(--text);}
 
 /* CARD GRID VIEW */
-.tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
-.task-card-grid{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:6px;min-height:110px;position:relative;}
+.tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
+.task-card-grid{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 14px 10px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:5px;min-height:120px;max-height:150px;overflow:hidden;position:relative;}
 .task-card-grid:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 16px rgba(249,103,0,0.12);}
 .task-card-grid.done{opacity:0.38;}
 .card-stripe{position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;}
@@ -117,7 +117,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .card-stripe-medium{background:var(--amber);}
 .card-stripe-low{background:var(--green);}
 .card-stripe-none{display:none;}
-.card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.35;padding-top:4px;}
+.card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.35;padding-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .task-card-grid.done .card-title{text-decoration:line-through;color:var(--text3);}
 .card-note{font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 .card-footer{margin-top:auto;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
@@ -142,6 +142,29 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .search-wrap input:focus{border-color:var(--accent);}
 .search-wrap input::placeholder{color:var(--text3);}
 .search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:12px;pointer-events:none;}
+
+/* DETAIL MODAL */
+.detail-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:0;width:100%;max-width:600px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;}
+.detail-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.detail-priority-bar{height:3px;border-radius:3px;margin-bottom:14px;}
+.detail-title{font-size:17px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:8px;}
+.detail-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.detail-body{overflow-y:auto;padding:18px 20px;flex:1;}
+.detail-section{margin-bottom:16px;}
+.detail-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:6px;}
+.detail-note{font-size:13px;color:var(--text2);line-height:1.65;white-space:pre-wrap;}
+.detail-rich-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--accent);}
+.detail-actions-list{display:flex;flex-direction:column;gap:5px;}
+.detail-action-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:7px;}
+.detail-action-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;}
+.detail-action-check:hover{border-color:var(--green);}
+.detail-action-check.done{background:var(--green);border-color:var(--green);}
+.detail-action-check.done::after{content:"✓";color:#03200e;font-size:8px;font-weight:700;}
+.detail-action-text{flex:1;font-size:13px;color:var(--text);}
+.detail-action-text.done{text-decoration:line-through;color:var(--text3);}
+.detail-action-assignee{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg4);padding:1px 6px;border-radius:8px;}
+.detail-attachments{display:flex;flex-wrap:wrap;gap:8px;}
+.detail-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
 
 /* TASK ROWS */
 .tasks{display:flex;flex-direction:column;gap:1px;}
@@ -460,6 +483,25 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveTask()">💾 Save task</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="overlay hidden" id="detailOverlay">
+  <div class="detail-modal">
+    <div class="detail-header">
+      <div class="detail-priority-bar" id="detailPriorityBar"></div>
+      <div class="detail-title" id="detailTitle"></div>
+      <div class="detail-meta" id="detailMeta"></div>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+    <div class="detail-footer">
+      <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
+      <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open rich</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
+      <div class="check-box" id="detailCheck" style="margin-left:auto;width:18px;height:18px;" onclick="toggleDoneFromDetail()"></div>
+      <span style="font-size:12px;color:var(--text2)" id="detailDoneLabel">Mark done</span>
     </div>
   </div>
 </div>
@@ -838,7 +880,7 @@ function taskCardHTML(t){
   var attachCount=(t.attachments||[]).length;
   var od=isOverdue(t.date);
   var dateStr=t.date?'<span class="card-date'+(od?' overdue':'')+'">'+ formatDate(t.date)+(od?' ⚠':'')+'</span>':''  ;
-  var h='<div class="task-card-grid '+(t.done?'done':'')+'" id="tc-'+t.id+'">';
+  var h='<div class="task-card-grid '+(t.done?'done':'')+'" id="tc-'+t.id+'" onclick="openDetail(\"'+t.id+'\")">';
   h+='<div class="card-stripe '+sc+'"></div>';
   h+='<div class="card-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="event.stopPropagation();toggleDone(\"'+t.id+'\")"></div></div>';
   h+='<div class="card-title">'+escHtml(t.title||"(No title)")+'</div>';
@@ -1115,6 +1157,124 @@ async function removeProjectTask(i){projectTasks.splice(i,1);await db.collection
 function exportData(){const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({tasks,sites,persons,projectTasks},null,2));a.download='workboard-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();showToast('Exported ✓');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
+// ── DETAIL MODAL ──
+let detailTaskId = null;
+
+function openDetail(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  detailTaskId = id;
+
+  // Priority bar
+  const barColors = {high:'var(--red)',medium:'var(--amber)',low:'var(--green)',none:'transparent'};
+  document.getElementById('detailPriorityBar').style.background = barColors[t.priority||'none'];
+
+  // Title
+  document.getElementById('detailTitle').textContent = t.title || '(No title)';
+
+  // Meta: tags + date
+  const tags = (t.sites||[]).map(s=>'<span class="itag itag-s">'+escHtml(s)+'</span>').join('')
+    +(t.persons||[]).map(p=>'<span class="itag itag-p">'+escHtml(p)+'</span>').join('')
+    +(t.tags||[]).map(g=>'<span class="itag itag-t">'+escHtml(g)+'</span>').join('');
+  const od = isOverdue(t.date);
+  const dateStr = t.date ? '<span class="task-date-inline'+(od?' overdue':'')+'" style="font-size:11px">'+formatDate(t.date)+(od?' ⚠':'')+'</span>' : '';
+  document.getElementById('detailMeta').innerHTML = tags + dateStr;
+
+  // Body
+  let body = '';
+
+  if (t.note || t.richBody) {
+    body += '<div class="detail-section">';
+    body += '<div class="detail-section-label">Notes</div>';
+    if (t.richBody) {
+      body += '<div class="detail-rich-body">'+escHtml(t.richBody)+'</div>';
+    } else if (t.note) {
+      body += '<div class="detail-note">'+escHtml(t.note)+'</div>';
+    }
+    body += '</div>';
+  }
+
+  const actions = t.actions || [];
+  if (actions.length) {
+    body += '<div class="detail-section">';
+    body += '<div class="detail-section-label">Action items ('+actions.filter(a=>a.done).length+'/'+actions.length+' done)</div>';
+    body += '<div class="detail-actions-list">';
+    actions.forEach((a, i) => {
+      body += '<div class="detail-action-row">'
+        +'<div class="detail-action-check'+(a.done?' done':'')+'" onclick="toggleDetailAction('+i+')"></div>'
+        +'<span class="detail-action-text'+(a.done?' done':'')+'">'+escHtml(a.text)+'</span>'
+        +(a.assignee?'<span class="detail-action-assignee">'+escHtml(a.assignee)+'</span>':'')
+        +'</div>';
+    });
+    body += '</div></div>';
+  }
+
+  const atts = t.attachments || [];
+  if (atts.length) {
+    body += '<div class="detail-section">';
+    body += '<div class="detail-section-label">Attachments ('+atts.length+')</div>';
+    body += '<div class="detail-attachments">';
+    atts.forEach((a, i) => {
+      if (a.type && a.type.startsWith('image/')) {
+        body += '<img class="task-attach-img" src="'+a.data+'" alt="'+escHtml(a.name)+'" onclick="showTaskAttachLightbox(\"'+id+'\",'+i+')" style="width:80px;height:60px;">';
+      } else {
+        body += '<a class="task-attach-file" href="'+a.data+'" download="'+escHtml(a.name)+'">📄 '+escHtml(a.name)+'</a>';
+      }
+    });
+    body += '</div></div>';
+  }
+
+  if (!body) body = '<div style="color:var(--text3);font-size:13px;padding:8px 0">No additional details.</div>';
+  document.getElementById('detailBody').innerHTML = body;
+
+  // Footer
+  const check = document.getElementById('detailCheck');
+  check.className = 'check-box' + (t.done ? ' checked' : '');
+  document.getElementById('detailDoneLabel').textContent = t.done ? 'Completed' : 'Mark done';
+  document.getElementById('detailRichBtn').style.display = t.richBody ? 'inline-flex' : 'none';
+
+  document.getElementById('detailOverlay').classList.remove('hidden');
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.add('hidden');
+  detailTaskId = null;
+}
+
+function editFromDetail() {
+  const id = detailTaskId;
+  closeDetail();
+  openEdit(id);
+}
+
+function richFromDetail() {
+  const id = detailTaskId;
+  closeDetail();
+  openRichEditor(id);
+}
+
+function toggleDoneFromDetail() {
+  if (!detailTaskId) return;
+  const t = tasks.find(x => x.id === detailTaskId);
+  if (!t) return;
+  db.collection('tasks').doc(detailTaskId).update({done: !t.done}).then(() => {
+    const check = document.getElementById('detailCheck');
+    const updated = !t.done;
+    check.className = 'check-box' + (updated ? ' checked' : '');
+    document.getElementById('detailDoneLabel').textContent = updated ? 'Completed' : 'Mark done';
+  });
+}
+
+async function toggleDetailAction(idx) {
+  const t = tasks.find(x => x.id === detailTaskId);
+  if (!t) return;
+  const actions = JSON.parse(JSON.stringify(t.actions || []));
+  actions[idx].done = !actions[idx].done;
+  await db.collection('tasks').doc(detailTaskId).update({actions});
+  // re-render detail
+  openDetail(detailTaskId);
+}
+
 // ── ATTACHMENTS ──
 let modalAttachments = []; // {name, type, data (base64), size}
 let richAttachments = [];
@@ -1212,10 +1372,11 @@ document.addEventListener('paste', (e) => {
 
 // ── EVENT LISTENERS ──
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape')closeModal();
+  if(e.key==='Escape'){closeModal();closeDetail();}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openModal();}
 });
 document.getElementById('taskOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('taskOverlay'))closeModal();});
+document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('detailOverlay'))closeDetail();});
 document.getElementById('projectInput').addEventListener('keydown',e=>{
   const inp=document.getElementById('projectInput');
   if((e.key==='Enter'||e.key===',')&&inp.value.trim()){e.preventDefault();const v=inp.value.trim().replace(/,/g,'');if(v&&!fProjects.includes(v))fProjects.push(v);inp.value='';renderModalChips();}
