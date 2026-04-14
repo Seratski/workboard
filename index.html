@@ -113,47 +113,50 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:12px;pointer-events:none;}
 
 /* TASK ROWS */
-.tasks{display:flex;flex-direction:column;gap:2px;}
-.task-row-wrap{display:flex;align-items:stretch;border-radius:8px;transition:background .12s;}
-.task-row-wrap:hover{background:var(--bg2);}
-.task-row-wrap.done{opacity:0.38;}
-.task-stripe{width:2px;border-radius:2px 0 0 2px;flex-shrink:0;align-self:stretch;}
+.tasks{display:flex;flex-direction:column;gap:1px;}
+.task-row-wrap{display:flex;align-items:stretch;border-radius:6px;transition:background .1s;border:1px solid transparent;}
+.task-row-wrap:hover{background:var(--bg2);border-color:var(--border);}
+.task-row-wrap.done{opacity:0.35;}
+.task-stripe{width:3px;border-radius:3px 0 0 3px;flex-shrink:0;align-self:stretch;}
 .stripe-high{background:var(--red);}
 .stripe-medium{background:var(--amber);}
 .stripe-low{background:var(--green);}
 .stripe-none{background:transparent;}
-.task-check{width:30px;display:flex;align-items:flex-start;justify-content:center;padding-top:10px;flex-shrink:0;}
-.check-box{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--border2);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;user-select:none;}
+.task-check{width:28px;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;flex-shrink:0;}
+.check-box{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;user-select:none;}
 .check-box:hover{border-color:var(--green);}
 .check-box.checked{background:var(--green);border-color:var(--green);}
-.check-box.checked::after{content:'✓';color:#03200e;font-size:9px;font-weight:700;}
-.task-main{flex:1;padding:8px 6px 8px 2px;min-width:0;}
-.task-title-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
-.task-title{font-size:13px;font-weight:500;color:var(--text);line-height:1.4;}
+.check-box.checked::after{content:'✓';color:#03200e;font-size:8px;font-weight:700;}
+.task-main{flex:1;padding:6px 6px 6px 2px;min-width:0;}
+.task-title-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.task-title{font-size:13px;font-weight:500;color:var(--text);line-height:1.35;}
 .task-row-wrap.done .task-title{text-decoration:line-through;color:var(--text3);}
-.task-meta-inline{display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
-.task-date-inline{font-size:10px;color:var(--text3);font-family:var(--mono);}
-.task-note-row{font-size:12px;color:var(--text2);margin-top:2px;line-height:1.45;white-space:pre-wrap;}
-.task-en-row{font-size:11px;color:var(--text3);background:var(--bg3);border-left:2px solid var(--accent);border-radius:0 4px 4px 0;padding:4px 8px;margin-top:4px;font-style:italic;}
-.itag{padding:1px 6px;border-radius:10px;font-size:10px;font-weight:500;font-family:var(--mono);}
-.itag-s{background:rgba(79,142,247,0.12);color:#7aadff;}
+.task-meta-inline{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-left:auto;}
+.task-date-inline{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg3);padding:1px 5px;border-radius:4px;}
+.task-date-inline.overdue{color:var(--red);background:rgba(255,57,39,0.1);}
+.task-note-row{font-size:11px;color:var(--text3);margin-top:2px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.task-note-row.expanded{white-space:pre-wrap;overflow:visible;}
+.task-en-row{font-size:11px;color:var(--text3);background:var(--bg3);border-left:2px solid var(--accent);border-radius:0 4px 4px 0;padding:3px 8px;margin-top:3px;font-style:italic;}
+.itag{padding:1px 5px;border-radius:8px;font-size:10px;font-weight:500;font-family:var(--mono);}
+.itag-s{background:rgba(249,103,0,0.12);color:#f9a060;}
 .itag-p{background:rgba(155,127,232,0.12);color:#b8a0f0;}
 .itag-t{background:rgba(41,201,176,0.12);color:#30d0b8;}
-.task-actions-col{display:flex;align-items:center;gap:3px;padding:0 8px 0 2px;opacity:0;transition:opacity .12s;flex-shrink:0;}
+.task-actions-col{display:flex;align-items:center;gap:2px;padding:0 6px 0 2px;opacity:0;transition:opacity .1s;flex-shrink:0;}
 .task-row-wrap:hover .task-actions-col{opacity:1;}
-.ia{background:transparent;border:none;padding:4px 6px;border-radius:5px;font-size:12px;cursor:pointer;color:var(--text3);font-family:var(--font);transition:all .1s;}
+.ia{background:transparent;border:none;padding:3px 5px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--text3);font-family:var(--font);transition:all .1s;}
 .ia:hover{background:var(--bg3);color:var(--label);}
 .ia.del:hover{color:var(--red);}
 
 /* ACTION PROGRESS */
-.action-progress{display:flex;align-items:center;gap:6px;margin-top:4px;}
-.action-progress-bar{flex:1;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;}
+.action-progress{display:flex;align-items:center;gap:5px;margin-top:3px;}
+.action-progress-bar{width:48px;height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;flex-shrink:0;}
 .action-progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width .3s;}
 .action-progress-text{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;}
 
-.section-divider{display:flex;align-items:center;gap:8px;margin:14px 0 6px;}
-.section-divider-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);}
-.section-divider-line{flex:1;height:1px;background:var(--border);}
+.section-divider{display:flex;align-items:center;gap:8px;margin:16px 0 4px;}
+.section-divider-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--label);display:flex;align-items:center;gap:5px;}
+.section-divider-count{font-size:10px;font-family:var(--mono);color:var(--text3);font-weight:400;}
+.section-divider-line{flex:1;height:1px;background:var(--border2);}
 .empty{text-align:center;padding:40px 20px;color:var(--text3);}
 .empty-icon{font-size:26px;margin-bottom:8px;}
 .empty p{font-size:13px;line-height:1.6;}
@@ -321,6 +324,25 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
   .bottom-nav-item .bni{font-size:16px;}
   .task-title{font-size:13px;}
 }
+.attach-zone{border:1.5px dashed var(--border2);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);}
+.attach-zone:hover{border-color:var(--accent);color:var(--accent);}
+.attach-zone.drag-over{border-color:var(--accent);background:var(--accent-glow);}
+.attach-preview{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.attach-thumb{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--border2);}
+.attach-thumb img{display:block;width:80px;height:60px;object-fit:cover;}
+.attach-thumb.is-file{width:auto;height:auto;display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg3);}
+.attach-thumb .attach-name{font-size:11px;color:var(--text2);max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.attach-thumb .attach-del{position:absolute;top:2px;right:2px;width:16px;height:16px;background:rgba(0,0,0,0.7);border-radius:50%;border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.attach-thumb.is-file .attach-del{position:static;background:transparent;color:var(--text3);width:auto;height:auto;font-size:12px;}
+.task-attachments{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.task-attach-img{width:60px;height:44px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer;}
+.task-attach-img:hover{opacity:0.85;}
+.task-attach-file{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text2);cursor:pointer;text-decoration:none;}
+.task-attach-file:hover{border-color:var(--accent);color:var(--accent);}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;display:flex;align-items:center;justify-content:center;cursor:zoom-out;}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;}
+.lightbox.hidden{display:none;}
+.paste-hint{font-size:11px;color:var(--text3);margin-top:4px;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
@@ -394,6 +416,15 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
         <select class="form-select" id="actionAssignee"></select>
         <button class="btn btn-ghost btn-sm" onclick="addActionItem()" style="flex-shrink:0;">+ Add</button>
       </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Attachments <span class="form-hint">paste screenshot or upload file</span></label>
+      <div class="attach-preview" id="modalAttachPreview"></div>
+      <div class="attach-zone" id="modalAttachZone" onclick="document.getElementById('modalFileInput').click()" ondragover="handleDragOver(event,'modalAttachZone')" ondragleave="handleDragLeave('modalAttachZone')" ondrop="handleDrop(event,'modal')">
+        📎 Click to upload or drag & drop — PNG, JPG, PDF (max 500KB each)
+      </div>
+      <input type="file" id="modalFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(event,'modal')" />
+      <div class="paste-hint">💡 Tip: Ctrl+V to paste a screenshot directly</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
@@ -519,6 +550,15 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
                 <button class="btn btn-orange btn-sm" onclick="addRichAction()" style="flex-shrink:0;">+ Add</button>
               </div>
             </div>
+          </div>
+          <div class="rich-section-label">Attachments</div>
+          <div class="rich-field">
+            <div class="attach-preview" id="richAttachPreview"></div>
+            <div class="attach-zone" id="richAttachZone" onclick="document.getElementById('richFileInput').click()" ondragover="handleDragOver(event,'richAttachZone')" ondragleave="handleDragLeave('richAttachZone')" ondrop="handleDrop(event,'rich')">
+              📎 Click to upload or drag & drop
+            </div>
+            <input type="file" id="richFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(event,'rich')" />
+            <div class="paste-hint">💡 Ctrl+V to paste screenshot</div>
           </div>
         </div>
       </div>
@@ -709,9 +749,9 @@ function renderTasks(){
   if(sort==='priority'){
     const high=f.filter(t=>t.priority==='high'),med=f.filter(t=>t.priority==='medium'),other=f.filter(t=>t.priority!=='high'&&t.priority!=='medium');
     let h='';
-    if(high.length){h+=divider('🔴 High priority');h+=high.map(taskHTML).join('');}
-    if(med.length){h+=divider('🟡 Medium priority');h+=med.map(taskHTML).join('');}
-    if(other.length){if(high.length||med.length)h+=divider('Other');h+=other.map(taskHTML).join('');}
+    if(high.length){h+=divider('🔴 High priority',high.length);h+=high.map(taskHTML).join('');}
+    if(med.length){h+=divider('🟡 Medium priority',med.length);h+=med.map(taskHTML).join('');}
+    if(other.length){if(high.length||med.length)h+=divider('Other',other.length);h+=other.map(taskHTML).join('');}
     el.innerHTML=h;
   }else{el.innerHTML=f.map(taskHTML).join('');}
 }
@@ -725,7 +765,7 @@ function renderDoneList(){
   document.getElementById('doneCount').textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
   document.getElementById('doneList').innerHTML=f.length?f.map(taskHTML).join(''):'<div class="empty"><div class="empty-icon">✅</div><p>No completed tasks yet.</p></div>';
 }
-function divider(l){return '<div class="section-divider"><span class="section-divider-label">'+l+'</span><div class="section-divider-line"></div></div>';}
+function divider(l,count){return '<div class="section-divider"><span class="section-divider-label">'+l+(count!==undefined?' <span class="section-divider-count">('+count+')</span>':'')+'</span><div class="section-divider-line"></div></div>';}
 
 function taskHTML(t){
   const sc={high:'stripe-high',medium:'stripe-medium',low:'stripe-low',none:'stripe-none'}[t.priority||'none'];
@@ -744,10 +784,11 @@ function taskHTML(t){
     +'<div class="task-main">'
       +'<div class="task-title-row">'
         +'<span class="task-title">'+escHtml(t.title||'(No title)')+richIcon+'</span>'
-        +'<div class="task-meta-inline">'+tags+(t.date?'<span class="task-date-inline">'+formatDate(t.date)+'</span>':'')+'</div>'
+        +'<div class="task-meta-inline">'+tags+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'">'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+'</div>'
       +'</div>'
-      +(t.note?'<div class="task-note-row">'+escHtml(t.note)+'</div>':'')
+      +(t.note?'<div class="task-note-row" onclick="this.classList.toggle(\"expanded\")" title="Click to expand">'+escHtml(t.note)+'</div>':'')
       +actionBar
+      +attachHTML(t)
     +'</div>'
     +'<div class="task-actions-col">'
       +(t.richBody?'<button class="ia" onclick="openRichEditor(\''+t.id+'\')">📝</button>':'')
@@ -757,9 +798,30 @@ function taskHTML(t){
   +'</div>';
 }
 
+function attachHTML(t) {
+  const atts = t.attachments || [];
+  if (!atts.length) return '';
+  return '<div class="task-attachments">'
+    + atts.map((a, i) => {
+      if (a.type && a.type.startsWith('image/')) {
+        return '<img class="task-attach-img" src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="showTaskAttachLightbox('' + t.id + '',' + i + ')" />';
+      }
+      return '<a class="task-attach-file" href="' + a.data + '" download="' + escHtml(a.name) + '">📄 ' + escHtml(a.name) + '</a>';
+    }).join('')
+    + '</div>';
+}
+function showTaskAttachLightbox(taskId, i) {
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return;
+  const a = (t.attachments || [])[i];
+  if (!a) return;
+  document.getElementById('lightboxImg').src = a.data;
+  document.getElementById('lightbox').classList.remove('hidden');
+}
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function formatDate(d){if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+function isOverdue(d){if(!d)return false;return d<new Date().toISOString().slice(0,10);}
 async function toggleDone(id){const t=tasks.find(x=>x.id===id);if(!t)return;await db.collection('tasks').doc(id).update({done:!t.done});}
 async function deleteTask(id){if(!confirm('Delete this task?'))return;await db.collection('tasks').doc(id).delete();showToast('Deleted');}
 
@@ -813,7 +875,7 @@ function toggleModalAction(i){fActions[i].done=!fActions[i].done;renderActionIte
 function removeAction(i){fActions.splice(i,1);renderActionItems();}
 
 function openModal(){
-  editingId=null;fSites=[];fPersons=[];fProjects=[];fActions=[];
+  editingId=null;fSites=[];fPersons=[];fProjects=[];fActions=[];modalAttachments=[];renderAttachPreview('modal');
   document.getElementById('modalTitle').textContent='New task';
   document.getElementById('fTitle').value='';document.getElementById('fNote').value='';
   document.getElementById('fPriority').value='none';document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
@@ -822,7 +884,7 @@ function openModal(){
 }
 function openEdit(id){
   const t=tasks.find(x=>x.id===id);if(!t)return;
-  editingId=id;fSites=[...(t.sites||[])];fPersons=[...(t.persons||[])];fProjects=[...(t.tags||[])];fActions=JSON.parse(JSON.stringify(t.actions||[]));
+  editingId=id;fSites=[...(t.sites||[])];fPersons=[...(t.persons||[])];fProjects=[...(t.tags||[])];fActions=JSON.parse(JSON.stringify(t.actions||[]));modalAttachments=JSON.parse(JSON.stringify(t.attachments||[]));renderAttachPreview('modal');
   document.getElementById('modalTitle').textContent='Edit task';
   document.getElementById('fTitle').value=t.title||'';document.getElementById('fNote').value=t.note||'';
   document.getElementById('fPriority').value=t.priority||'none';document.getElementById('fDate').value=t.date||'';
@@ -831,7 +893,7 @@ function openEdit(id){
 function closeModal(){document.getElementById('taskOverlay').classList.add('hidden');editingId=null;}
 async function saveTask(){
   const title=document.getElementById('fTitle').value.trim();if(!title){document.getElementById('fTitle').focus();return;}
-  const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),attachments:JSON.parse(JSON.stringify(modalAttachments)),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
   const newPTs=fProjects.filter(p=>!projectTasks.includes(p));
   if(newPTs.length)await db.collection('meta').doc('projectTasks').set({list:[...projectTasks,...newPTs]});
   if(editingId){await db.collection('tasks').doc(editingId).update(data);showToast('Updated ✓');}
@@ -892,14 +954,14 @@ function openRichEditor(id){
     document.getElementById('richBody').value=t.richBody||t.note||'';
     document.getElementById('richPriority').value=t.priority||'none';
     document.getElementById('richDate').value=t.date||'';
-    rSites=[...(t.sites||[])];rPersons=[...(t.persons||[])];rProjects=[...(t.tags||[])];rActions=JSON.parse(JSON.stringify(t.actions||[]));
+    rSites=[...(t.sites||[])];rPersons=[...(t.persons||[])];rProjects=[...(t.tags||[])];rActions=JSON.parse(JSON.stringify(t.actions||[]));richAttachments=JSON.parse(JSON.stringify(t.attachments||[]));renderAttachPreview('rich');
     document.getElementById('richTaskStatus').textContent='Editing saved task';
   }else{
     document.getElementById('richTitle').value='';
     document.getElementById('richBody').value='';
     document.getElementById('richPriority').value='none';
     document.getElementById('richDate').value=new Date().toISOString().slice(0,10);
-    rSites=[];rPersons=[];rProjects=[];rActions=[];
+    rSites=[];rPersons=[];rProjects=[];rActions=[];richAttachments=[];renderAttachPreview('rich');
     document.getElementById('richTaskStatus').textContent='Draft — not saved yet';
   }
   renderRichChips();
@@ -930,6 +992,7 @@ async function saveRichTask(){
     date:document.getElementById('richDate').value,
     sites:[...rSites],persons:[...rPersons],tags:[...rProjects],
     actions:JSON.parse(JSON.stringify(rActions)),
+    attachments:JSON.parse(JSON.stringify(richAttachments)),
     done:false,
     updatedAt:firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -964,6 +1027,101 @@ async function removeProjectTask(i){projectTasks.splice(i,1);await db.collection
 function exportData(){const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({tasks,sites,persons,projectTasks},null,2));a.download='workboard-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();showToast('Exported ✓');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
+// ── ATTACHMENTS ──
+let modalAttachments = []; // {name, type, data (base64), size}
+let richAttachments = [];
+
+const MAX_FILE_SIZE = 500 * 1024; // 500KB
+
+function handleDragOver(e, zoneId) {
+  e.preventDefault();
+  document.getElementById(zoneId).classList.add('drag-over');
+}
+function handleDragLeave(zoneId) {
+  document.getElementById(zoneId).classList.remove('drag-over');
+}
+function handleDrop(e, target) {
+  e.preventDefault();
+  const zoneId = target === 'modal' ? 'modalAttachZone' : 'richAttachZone';
+  document.getElementById(zoneId).classList.remove('drag-over');
+  processFiles(Array.from(e.dataTransfer.files), target);
+}
+function handleFileInput(e, target) {
+  processFiles(Array.from(e.target.files), target);
+  e.target.value = '';
+}
+function processFiles(files, target) {
+  const arr = target === 'modal' ? modalAttachments : richAttachments;
+  const previewId = target === 'modal' ? 'modalAttachPreview' : 'richAttachPreview';
+  let errors = [];
+  files.forEach(file => {
+    if (file.size > MAX_FILE_SIZE) { errors.push(file.name + ' is too large (max 500KB)'); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      arr.push({ name: file.name, type: file.type, data: e.target.result, size: file.size });
+      renderAttachPreview(target);
+    };
+    reader.readAsDataURL(file);
+  });
+  if (errors.length) showToast(errors[0]);
+}
+function renderAttachPreview(target) {
+  const arr = target === 'modal' ? modalAttachments : richAttachments;
+  const el = document.getElementById(target === 'modal' ? 'modalAttachPreview' : 'richAttachPreview');
+  el.innerHTML = arr.map((a, i) => {
+    if (a.type.startsWith('image/')) {
+      return '<div class="attach-thumb">'
+        + '<img src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="openLightbox('' + target + '',' + i + ')" />'
+        + '<button class="attach-del" onclick="removeAttach('' + target + '',' + i + ')">✕</button>'
+        + '</div>';
+    } else {
+      return '<div class="attach-thumb is-file">'
+        + '📄 <span class="attach-name">' + escHtml(a.name) + '</span>'
+        + '<button class="attach-del" onclick="removeAttach('' + target + '',' + i + ')">✕</button>'
+        + '</div>';
+    }
+  }).join('');
+}
+function removeAttach(target, i) {
+  if (target === 'modal') modalAttachments.splice(i, 1);
+  else richAttachments.splice(i, 1);
+  renderAttachPreview(target);
+}
+function openLightbox(target, i) {
+  const arr = target === 'modal' ? modalAttachments : richAttachments;
+  document.getElementById('lightboxImg').src = arr[i].data;
+  document.getElementById('lightbox').classList.remove('hidden');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.add('hidden');
+}
+
+// Paste handler — works when modal or rich editor is open
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  const modalOpen = !document.getElementById('taskOverlay').classList.contains('hidden');
+  const richOpen = document.getElementById('page-rich').style.display !== 'none';
+  if (!modalOpen && !richOpen) return;
+  const target = modalOpen ? 'modal' : 'rich';
+  Array.from(items).forEach(item => {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (!file) return;
+      if (file.size > MAX_FILE_SIZE) { showToast('Image too large (max 500KB)'); return; }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const arr = target === 'modal' ? modalAttachments : richAttachments;
+        arr.push({ name: 'screenshot-' + Date.now() + '.png', type: 'image/png', data: ev.target.result, size: file.size });
+        renderAttachPreview(target);
+        showToast('Screenshot pasted ✓');
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+});
+
 // ── EVENT LISTENERS ──
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape')closeModal();
@@ -990,5 +1148,8 @@ document.getElementById('newSiteInput').addEventListener('keydown',e=>{if(e.key=
 document.getElementById('newPersonInput').addEventListener('keydown',e=>{if(e.key==='Enter')addPerson();});
 document.getElementById('newProjectInput').addEventListener('keydown',e=>{if(e.key==='Enter')addProjectTask();});
 </script>
+<div class="lightbox hidden" id="lightbox" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" alt="attachment" />
+</div>
 </body>
 </html>
