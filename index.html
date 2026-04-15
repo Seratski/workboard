@@ -2470,9 +2470,11 @@ function handleUser(user){
 
 // Handle redirect result first, then listen for auth state
 auth.getRedirectResult().then(result=>{
+  console.log('Redirect result:', result);
   if(result&&result.user)handleUser(result.user);
 }).catch(err=>{
-  if(err&&err.code!=='auth/no-auth-event')console.warn('Redirect auth error:',err.code);
+  console.log('Redirect error:', err.code, err.message);
+  if(err&&err.code!=='auth/no-auth-event')showToast('Login failed: '+err.code);
 });
 
 auth.onAuthStateChanged(user=>handleUser(user));
