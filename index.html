@@ -1956,7 +1956,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();closeDetail();}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openModal();}
 });
-document.getElementById('taskOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('taskOverlay'))closeModal();});
+// Task modal does not close on background click to prevent accidental data loss
 document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('detailOverlay'))closeDetail();});
 document.getElementById('projectInput').addEventListener('keydown',e=>{
   const inp=document.getElementById('projectInput');
