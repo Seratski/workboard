@@ -2479,14 +2479,7 @@ auth.onAuthStateChanged(user=>handleUser(user));
 
 function signInGoogle(){
   const provider=new firebase.auth.GoogleAuthProvider();
-  // Try popup first, fall back to redirect if blocked
-  auth.signInWithPopup(provider).catch(err=>{
-    if(err.code==='auth/popup-blocked'||err.code==='auth/popup-closed-by-user'||err.code==='auth/cancelled-popup-request'){
-      auth.signInWithRedirect(provider);
-    } else {
-      showToast('Login failed: '+err.code);
-    }
-  });
+  auth.signInWithRedirect(provider);
 }
 
 function doSignOut(){if(confirm('Sign out of WorkBoard?'))auth.signOut();}
