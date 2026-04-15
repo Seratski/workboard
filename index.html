@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>WorkBoard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-app-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-app-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-firestore-compat.min.js"></script>
 <style>
 :root{
   --bg:#1a1a1a;--bg2:#252525;--bg3:#2e2e2e;--bg4:#383838;
@@ -815,8 +815,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 </div>
 
 <script></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-firestore-compat.min.js"></script>
 <style>
 :root{
   --bg:#1a1a1a;--bg2:#252525;--bg3:#2e2e2e;--bg4:#383838;
@@ -1624,8 +1624,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 </div>
 
 <script></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-firestore-compat.min.js"></script>
 <style>
 :root{
   --bg:#1a1a1a;--bg2:#252525;--bg3:#2e2e2e;--bg4:#383838;
@@ -2467,8 +2467,8 @@ auth.onAuthStateChanged(user=>{
     if(unsubTasks){unsubTasks();unsubSites();unsubPersons();if(unsubProjects)unsubProjects();}
   }
 });
-function signInGoogle(){auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());}
-auth.getRedirectResult().catch(err=>{if(err&&err.code&&err.code!=='auth/no-auth-event')showToast('Login failed');});
+function signInGoogle(){auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(()=>showToast('Login failed'));}
+
 function doSignOut(){if(confirm('Sign out of WorkBoard?'))auth.signOut();}
 
 function startListeners(){
