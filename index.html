@@ -12,7 +12,7 @@
 :root{
   --bg:#1a1a1a;--bg2:#252525;--bg3:#2e2e2e;--bg4:#383838;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--border3:rgba(255,255,255,0.24);
-  --text:#f0f0f0;--text2:#b0b0b0;--text3:#949494;--label:#e8e8e8;
+  --text:#f0f0f0;--text2:#c0c0c0;--text3:#a8a8a8;--label:#e8e8e8;
   --accent:#F96700;--accent2:#d45500;
   --accent-glow:rgba(249,103,0,0.15);
   --green:#2ec97e;--amber:#FFE100;--red:#FF3927;--teal:#22c4ac;--purple:#9b7fe8;
@@ -1011,6 +1011,7 @@ function showPage(p){
     const bn=document.getElementById('bnav-'+x);if(bn)bn.classList.toggle('active',isActive);
   });
   const fabEl3=document.getElementById('fab');if(fabEl3)fabEl3.style.display=p==='rich'?'none':'flex';
+  if(p==='settings'){renderSettingsLists();startTrashListener();}
 }
 
 // ── FILTER PANEL ──
@@ -1270,7 +1271,14 @@ async function toggleDone(id){
   hist.push({type:t.done?'reopened':'completed',time:Date.now()});
   await db.collection('tasks').doc(id).update({done:!t.done,history:hist});
 }
-async function deleteTask(id){if(!confirm('Delete this task?'))return;await db.collection('tasks').doc(id).delete();showToast('Deleted');}
+async function deleteTask(id){
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  const trashData=Object.assign({},t,{deletedAt:firebase.firestore.FieldValue.serverTimestamp(),originalId:id});
+  delete trashData.id;
+  await db.collection('trash').add(trashData);
+  await db.collection('tasks').doc(id).delete();
+  showToast('Moved to Trash — restore in Settings');
+}
 
 // ── QUICK TASK MODAL ──
 function renderModalChips(){
@@ -1685,7 +1693,7 @@ function openDetail(elOrId) {
   // ── COMMENTS ──
   const comments = t.comments || [];
   body += '<div class="detail-section">';
-  body += '<div class="detail-section-label">Comments</div>';
+  body += '<div class="detail-section-label">Comments & notes</div>';
   if (comments.length) {
     comments.forEach(function(c) {
       body += '<div class="comment-item">'
