@@ -1402,7 +1402,7 @@ function openEdit(id){
   renderModalChips();document.getElementById('taskOverlay').classList.remove('hidden');
 }
 function closeModal(){
-  // Autosave draft to localStorage if there's a title
+  // Autosave draft to localStorage if there's a title and not editing
   const title=document.getElementById('fTitle')?.value?.trim();
   if(title&&!editingId){
     try{
@@ -1415,6 +1415,12 @@ function closeModal(){
       }));
     }catch(e){}
   }
+  // Always clear fields on close
+  document.getElementById('fTitle').value='';
+  document.getElementById('fNote').value='';
+  document.getElementById('fPriority').value='none';
+  document.getElementById('fDate').value='';
+  fSites=[];fPersons=[];fProjects=[];fActions=[];fLinks=[];modalAttachments=[];
   document.getElementById('taskOverlay').classList.add('hidden');
   editingId=null;
 }
