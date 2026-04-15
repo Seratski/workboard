@@ -585,7 +585,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     <div class="detail-body" id="detailBody"></div>
     <div class="detail-footer">
       <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
-      <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open rich</button>
+      <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open note</button>
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
       <div class="check-box" id="detailCheck" style="margin-left:auto;width:18px;height:18px;" onclick="toggleDoneFromDetail()"></div>
       <span style="font-size:12px;color:var(--text2)" id="detailDoneLabel">Mark done</span>
@@ -605,8 +605,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     </div>
     <div class="top-right">
       <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export</button>
-      <button class="btn btn-orange btn-sm" onclick="openRichEditor(null)">+ Detailed task</button>
-      <button class="btn btn-primary btn-sm" onclick="openModal()">+ New task</button>
+      <button class="btn btn-orange btn-sm" onclick="openRichEditor(null)">+ Note</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal()">+ Task</button>
       <div class="user-chip" onclick="doSignOut()" title="Sign out">
         <div class="user-avatar" id="userAvatar"></div>
         <span id="userInfo">User</span>
@@ -658,7 +658,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
             <input id="searchInput" placeholder="Search… (Ctrl+K)" oninput="renderTasks()" />
           </div>
         </div>
-        <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ New task" or "📝 Rich task" above.</p></div></div>
+        <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ Task" or "📝 Rich task" above.</p></div></div>
       </div>
     </div>
   </div>
@@ -780,6 +780,1630 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
         <div class="settings-card-title">Data export</div>
         <div class="settings-card-sub">Download all tasks as JSON backup.</div>
         <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export backup</button>
+      </div>
+      <div class="settings-card settings-card-full">
+        <div class="settings-card-title">🗑 Trash</div>
+        <div class="settings-card-sub">Recently deleted tasks. Restore or permanently delete.</div>
+        <div class="settings-list" id="trashList" style="max-height:240px;"></div>
+        <button class="btn btn-danger btn-sm" style="margin-top:8px;" onclick="emptyTrash()">Empty trash permanently</button>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">Account</div>
+        <div class="settings-card-sub">Signed in as <span id="settingsEmail" style="color:var(--label)"></span></div>
+        <button class="btn btn-danger btn-sm" onclick="doSignOut()">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <!-- MOBILE ACTION BAR -->
+  <div class="mob-action-bar" id="mobActionBar">
+    <button class="mob-action-btn" onclick="openModal()">+ Task</button>
+    <button class="mob-action-btn mob-action-btn-orange" onclick="openRichEditor(null)">+ Note</button>
+  </div>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="bottom-nav-item active" id="bnav-board" onclick="showPage('board')"><span class="bni">📋</span>Board</button>
+      <button class="bottom-nav-item" id="bnav-today" onclick="showPage('today')"><span class="bni">📅</span>Today</button>
+      <button class="bottom-nav-item" id="bnav-filter" onclick="openMobileFilter()"><span class="bni">⚡</span>Filter</button>
+      <button class="bottom-nav-item" id="bnav-done" onclick="showPage('done')"><span class="bni">✅</span>Done</button>
+      <button class="bottom-nav-item" id="bnav-settings" onclick="showPage('settings')"><span class="bni">⚙️</span>Settings</button>
+    </div>
+  </div>
+</div>
+
+<script></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
+<style>
+:root{
+  --bg:#1a1a1a;--bg2:#252525;--bg3:#2e2e2e;--bg4:#383838;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--border3:rgba(255,255,255,0.24);
+  --text:#f0f0f0;--text2:#b0b0b0;--text3:#949494;--label:#e8e8e8;
+  --accent:#F96700;--accent2:#d45500;
+  --accent-glow:rgba(249,103,0,0.15);
+  --green:#2ec97e;--amber:#FFE100;--red:#FF3927;--teal:#22c4ac;--purple:#9b7fe8;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+/* LOGIN */
+#loginScreen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+#loginScreen.hidden{display:none;}
+#loadingScreen{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;}
+#loadingScreen.hidden{display:none;}
+.login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:40px 32px;width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;}
+.login-logo{width:50px;height:50px;background:var(--accent);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;}
+.login-title{font-size:20px;font-weight:600;}
+.login-sub{font-size:13px;color:var(--text2);line-height:1.6;}
+.btn-google{display:flex;align-items:center;gap:10px;padding:12px 20px;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;width:100%;justify-content:center;}
+.btn-google:hover{background:var(--bg4);border-color:var(--border3);}
+.login-note{font-size:11px;color:var(--text3);}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loadingScreen p{color:var(--text2);font-size:13px;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:13px;font-family:var(--font);font-weight:500;cursor:pointer;border:none;transition:all .15s;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);}
+.btn-ghost:hover{background:var(--bg3);color:var(--text);border-color:var(--border3);}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px;}
+.btn-danger{background:rgba(255,57,39,0.1);border:1px solid rgba(255,57,39,0.25);color:var(--red);}
+.btn-danger:hover{background:rgba(255,57,39,0.2);}
+.btn-orange{background:var(--accent);color:#fff;}
+.btn-orange:hover{background:var(--accent2);}
+
+/* TOPBAR */
+.topbar{height:50px;background:var(--bg2);border-bottom:2px solid var(--accent);display:flex;align-items:center;padding:0 16px;gap:0;flex-shrink:0;}
+.logo{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px;white-space:nowrap;margin-right:14px;}
+.logo-mark{width:24px;height:24px;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;}
+.logo-text{display:inline;}
+.nav-tabs{display:flex;gap:1px;overflow-x:auto;}
+.nav-tabs::-webkit-scrollbar{display:none;}
+.nav-tab{display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:6px;cursor:pointer;color:var(--text2);font-size:13px;font-weight:500;transition:all .12s;border:none;background:transparent;font-family:var(--font);white-space:nowrap;flex-shrink:0;}
+.nav-tab:hover{background:var(--bg3);color:var(--text);}
+.nav-tab.active{background:var(--accent-glow);color:var(--accent);}
+.nav-badge{background:var(--accent);color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;font-family:var(--mono);}
+.top-right{margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0;}
+.user-chip{display:flex;align-items:center;gap:6px;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text2);cursor:pointer;}
+.user-chip:hover{border-color:var(--border2);color:var(--text);}
+.user-avatar{width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff;overflow:hidden;flex-shrink:0;}
+.user-avatar img{width:100%;height:100%;object-fit:cover;}
+
+/* PAGES */
+.page-inner{flex:1;overflow-y:auto;padding:20px 24px;-webkit-overflow-scrolling:touch;}
+
+/* BOARD */
+.board-shell{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.board-layout{flex:1;display:grid;grid-template-columns:220px 1fr;gap:16px;overflow:hidden;padding:20px 24px;}
+.board-left{overflow-y:auto;}
+.board-right{overflow-y:auto;}
+
+/* FILTER PANEL */
+.filter-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.filter-panel-head{padding:10px 13px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.filter-panel-title{font-size:11px;font-weight:600;color:var(--label);text-transform:uppercase;letter-spacing:0.3px;}
+.filter-clear-btn{font-size:11px;color:var(--red);cursor:pointer;padding:2px 7px;border-radius:4px;border:none;background:transparent;font-family:var(--font);}
+.filter-clear-btn:hover{background:rgba(224,72,72,0.1);}
+.filter-clear-btn.hidden{display:none;}
+.filter-group{padding:8px 13px;border-bottom:1px solid var(--border);}
+.filter-group:last-child{border-bottom:none;}
+.filter-group-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:5px;display:block;}
+.filter-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.fchip{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;transition:all .1s;background:transparent;font-family:var(--font);}
+.fchip:hover{border-color:var(--border3);color:var(--label);}
+.fchip.fs{color:#7aadff;border-color:rgba(79,142,247,0.3);background:rgba(79,142,247,0.06);}
+.fchip.fp{color:#b8a0f0;border-color:rgba(155,127,232,0.3);background:rgba(155,127,232,0.06);}
+.fchip.ft{color:#30d0b8;border-color:rgba(41,201,176,0.3);background:rgba(41,201,176,0.06);}
+.fchip.fpr.high{color:#f07878;border-color:rgba(224,72,72,0.3);background:rgba(224,72,72,0.06);}
+.fchip.fpr.medium{color:#f0b060;border-color:rgba(232,150,42,0.3);background:rgba(232,150,42,0.06);}
+.fchip.fpr.low{color:#50d898;border-color:rgba(46,201,126,0.3);background:rgba(46,201,126,0.06);}
+.fchip.on.fs{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.fchip.on.fp{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.fchip.on.ft{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.fchip.on.fpr{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+
+/* TASKS HEADER */
+.tasks-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.view-toggle{display:flex;gap:2px;background:var(--bg3);border-radius:6px;padding:2px;}
+.view-btn{background:transparent;border:none;border-radius:5px;padding:5px 8px;cursor:pointer;color:var(--text3);font-size:13px;transition:all .12s;}
+.view-btn.active{background:var(--bg4);color:var(--label);}
+.view-btn:hover{color:var(--text);}
+;
+/* CARD GRID VIEW */
+.tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
+.task-card-grid{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 14px 10px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:5px;min-height:120px;max-height:150px;overflow:hidden;position:relative;}
+.task-card-grid:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 16px rgba(249,103,0,0.12);}
+.task-card-grid.done{opacity:0.38;}
+.card-stripe{position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;}
+.card-stripe-high{background:var(--red);}
+.card-stripe-medium{background:var(--amber);}
+.card-stripe-low{background:var(--green);}
+.card-stripe-none{display:none;}
+.card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.35;padding-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.task-card-grid.done .card-title{text-decoration:line-through;color:var(--text3);}
+.card-note{font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.card-footer{margin-top:auto;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.card-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:auto;}
+.card-date.overdue{color:var(--red);}
+.card-actions{display:none;}
+.card-check{display:none;}
+.card-progress{height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:2px;}
+.card-progress-fill{height:100%;background:var(--green);border-radius:2px;}
+.card-attach-count{font-size:10px;color:var(--text3);}
+.grid-section-label{grid-column:1/-1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--label);display:flex;align-items:center;gap:8px;padding-bottom:2px;}
+.grid-section-line{flex:1;height:1px;background:var(--border2);}
+.grid-section-count{font-size:10px;font-family:var(--mono);color:var(--text3);font-weight:400;}
+.tasks-title{font-size:15px;font-weight:600;color:var(--text);}
+.tasks-count{font-size:12px;color:var(--text3);font-family:var(--mono);}
+.sort-select{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--label);font-family:var(--font);font-size:12px;outline:none;cursor:pointer;}
+.sort-select option{background:var(--bg3);}
+.search-wrap{margin-left:auto;position:relative;width:200px;}
+.search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 10px 6px 28px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;transition:border-color .15s;}
+.search-wrap input:focus{border-color:var(--accent);}
+.search-wrap input::placeholder{color:var(--text3);}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:12px;pointer-events:none;}
+
+/* DETAIL MODAL */
+.detail-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:0;width:100%;max-width:600px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;}
+.detail-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.detail-priority-bar{height:3px;border-radius:3px;margin-bottom:14px;}
+.detail-title{font-size:17px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:8px;}
+.detail-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.detail-body{overflow-y:auto;padding:18px 20px;flex:1;}
+.detail-section{margin-bottom:16px;}
+.detail-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:6px;}
+.detail-note{font-size:13px;color:var(--text2);line-height:1.65;white-space:pre-wrap;}
+.detail-rich-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--accent);}
+.detail-actions-list{display:flex;flex-direction:column;gap:5px;}
+.detail-action-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:7px;}
+.detail-action-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;}
+.detail-action-check:hover{border-color:var(--green);}
+.detail-action-check.done{background:var(--green);border-color:var(--green);}
+.detail-action-check.done::after{content:"✓";color:#03200e;font-size:8px;font-weight:700;}
+.detail-action-text{flex:1;font-size:13px;color:var(--text);}
+.detail-action-text.done{text-decoration:line-through;color:var(--text3);}
+.detail-action-assignee{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg4);padding:1px 6px;border-radius:8px;}
+.detail-attachments{display:flex;flex-wrap:wrap;gap:8px;}
+.detail-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+
+/* TASK ROWS */
+.tasks{display:flex;flex-direction:column;gap:1px;}
+.task-row-wrap{display:flex;align-items:stretch;border-radius:6px;transition:background .1s;border:1px solid transparent;}
+.task-row-wrap:hover{background:var(--bg2);border-color:var(--border);}
+.task-row-wrap.done{opacity:0.35;}
+.task-stripe{width:3px;border-radius:3px 0 0 3px;flex-shrink:0;align-self:stretch;}
+.stripe-high{background:var(--red);}
+.stripe-medium{background:var(--amber);}
+.stripe-low{background:var(--green);}
+.stripe-none{background:transparent;}
+.task-check{width:28px;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;flex-shrink:0;}
+.check-box{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;user-select:none;}
+.check-box:hover{border-color:var(--green);}
+.check-box.checked{background:var(--green);border-color:var(--green);}
+.check-box.checked::after{content:'✓';color:#03200e;font-size:8px;font-weight:700;}
+.task-main{flex:1;padding:6px 6px 6px 2px;min-width:0;}
+.task-title-row{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
+.task-title{font-size:13px;font-weight:500;color:var(--text);line-height:1.35;}
+.task-row-wrap.done .task-title{text-decoration:line-through;color:var(--text3);}
+.task-meta-inline{display:flex;flex-wrap:wrap;gap:3px;align-items:center;}
+.task-date-inline{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg3);padding:1px 5px;border-radius:4px;}
+.task-date-inline.overdue{color:var(--red);background:rgba(255,57,39,0.1);}
+.task-tags-row{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-top:2px;}
+.task-note-row{font-size:11px;color:var(--text3);margin-top:2px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.task-note-row.expanded{white-space:pre-wrap;overflow:visible;}
+.task-en-row{font-size:11px;color:var(--text3);background:var(--bg3);border-left:2px solid var(--accent);border-radius:0 4px 4px 0;padding:3px 8px;margin-top:3px;font-style:italic;}
+.itag{padding:1px 5px;border-radius:8px;font-size:10px;font-weight:500;font-family:var(--mono);}
+.itag-s{background:rgba(249,103,0,0.12);color:#f9a060;}
+.itag-p{background:rgba(155,127,232,0.12);color:#b8a0f0;}
+.itag-t{background:rgba(41,201,176,0.12);color:#30d0b8;}
+.task-actions-col{display:none;}
+.ia{background:transparent;border:none;padding:3px 5px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--text3);font-family:var(--font);transition:all .1s;}
+.ia:hover{background:var(--bg3);color:var(--label);}
+.ia.del:hover{color:var(--red);}
+
+/* ACTION PROGRESS */
+.action-progress{display:flex;align-items:center;gap:5px;margin-top:3px;}
+.action-progress-bar{width:48px;height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;flex-shrink:0;}
+.action-progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width .3s;}
+.action-progress-text{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;}
+
+.section-divider{display:flex;align-items:center;gap:8px;margin:18px 0 6px;}
+.section-divider-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--label);display:flex;align-items:center;gap:5px;}
+.section-divider-count{font-size:10px;font-family:var(--mono);color:var(--text3);font-weight:400;}
+.section-divider-line{flex:1;height:1px;background:var(--border2);}
+.section-divider.grouped{margin:20px 0 8px;}
+.section-divider.grouped .section-divider-label{font-size:12px;color:var(--accent);letter-spacing:0.5px;background:var(--accent-glow);padding:4px 10px;border-radius:6px;border:1px solid rgba(249,103,0,0.25);}
+.section-divider.grouped .section-divider-count{color:var(--accent);opacity:0.7;}
+.section-divider.grouped .section-divider-line{background:rgba(249,103,0,0.2);}
+.empty{text-align:center;padding:40px 20px;color:var(--text3);}
+.empty-icon{font-size:26px;margin-bottom:8px;}
+.empty p{font-size:13px;line-height:1.6;}
+
+/* QUICK TASK MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px);}
+.overlay.hidden{display:none;}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:22px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;}
+.modal-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:18px;}
+.form-field{margin-bottom:12px;}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--label);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;}
+.form-hint{font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px;}
+.form-input,.form-textarea,.form-select{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s;resize:none;}
+.form-input:focus,.form-textarea:focus,.form-select:focus{border-color:var(--accent);}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--text3);}
+.form-textarea{min-height:70px;}
+.form-select{cursor:pointer;}
+.form-select option{background:var(--bg3);}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+input[type="date"]{color-scheme:dark;}
+input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1) hue-rotate(190deg);cursor:pointer;opacity:0.7;}
+.chip-grid{display:flex;flex-wrap:wrap;gap:5px;}
+.ms-chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;transition:all .1s;background:transparent;font-family:var(--font);user-select:none;}
+.ms-chip:hover{border-color:var(--border3);color:var(--label);}
+.ms-chip.sel-s{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.ms-chip.sel-p{background:rgba(155,127,232,0.14);border-color:#9b7fe8;color:#b8a0f0;}
+.ms-chip.sel-t{background:rgba(41,201,176,0.14);border-color:#29c9b0;color:#30d0b8;}
+.tag-input-wrap{display:flex;flex-wrap:wrap;gap:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:7px;min-height:36px;cursor:text;transition:border-color .15s;margin-top:5px;}
+.tag-input-wrap:focus-within{border-color:var(--accent);}
+.tag-input-wrap .itag{cursor:pointer;}
+.tag-input-wrap .itag:hover{opacity:0.7;}
+.tag-inline-input{background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:13px;min-width:100px;flex:1;}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);}
+
+/* ACTION ITEMS IN MODAL */
+.action-item-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);margin-bottom:5px;}
+.action-item-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+.action-item-check:hover{border-color:var(--green);}
+.action-item-check.done{background:var(--green);border-color:var(--green);}
+.action-item-check.done::after{content:'✓';color:#03200e;font-size:8px;font-weight:700;}
+.action-item-text{flex:1;font-size:12px;color:var(--text);}
+.action-item-text.done{text-decoration:line-through;color:var(--text3);}
+.action-item-assignee{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg4);padding:1px 6px;border-radius:8px;white-space:nowrap;}
+.action-item-del{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:3px;}
+.action-item-del:hover{color:var(--red);}
+.action-add-row{display:flex;gap:6px;align-items:center;margin-top:4px;}
+.action-add-row .form-input{flex:1;}
+.action-add-row .form-select{width:110px;flex-shrink:0;padding:7px 8px;}
+
+/* RICH TASK EDITOR PAGE */
+.rich-editor-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden;}
+.rich-editor-layout{flex:1;display:grid;grid-template-columns:3fr 2fr;gap:0;overflow:hidden;}
+.rich-editor-left{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);}
+.rich-editor-right{overflow-y:auto;padding:20px;background:var(--bg3);}
+.rich-editor-head{padding:14px 20px 12px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.rich-back-btn{background:transparent;border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.rich-back-btn:hover{background:var(--bg3);color:var(--text);}
+.rich-title-input{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:16px;font-weight:600;color:var(--text);min-width:0;}
+.rich-title-input::placeholder{color:var(--text3);}
+.rich-save-status{font-size:11px;color:var(--text3);white-space:nowrap;}
+.rich-body{flex:1;overflow-y:auto;padding:16px 20px;}
+.rich-textarea{width:100%;flex:1;background:transparent;border:none;outline:none;resize:none;font-family:var(--font);font-size:14px;color:var(--text2);line-height:1.8;min-height:400px;}
+.rich-textarea::placeholder{color:var(--text3);}
+.rich-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:8px;margin-top:16px;}
+.rich-section-label:first-child{margin-top:0;}
+.rich-field{margin-bottom:14px;}
+.rich-actions-list{display:flex;flex-direction:column;gap:5px;margin-bottom:6px;}
+.rich-footer{padding:12px 20px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+
+/* SETTINGS */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:780px;}
+.settings-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
+.settings-card-full{grid-column:1/-1;}
+.settings-card-title{font-size:13px;font-weight:600;color:var(--label);margin-bottom:2px;}
+.settings-card-sub{font-size:12px;color:var(--text3);margin-bottom:12px;}
+.settings-list{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;max-height:160px;overflow-y:auto;}
+.settings-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg3);border-radius:6px;}
+.settings-item-name{font-size:13px;color:var(--text);}
+.settings-add-row{display:flex;gap:7px;}
+.settings-add-row input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;}
+.settings-add-row input:focus{border-color:var(--accent);}
+.settings-add-row input::placeholder{color:var(--text3);}
+
+/* MOBILE BOTTOM NAV */
+.bottom-nav{display:none;height:56px;background:var(--bg2);border-top:2px solid var(--accent);flex-shrink:0;}
+.bottom-nav-inner{display:flex;height:100%;}
+.bottom-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text3);font-size:10px;font-weight:500;border:none;background:transparent;font-family:var(--font);transition:color .12s;padding:0;}
+.bottom-nav-item.active{color:var(--accent);font-weight:600;}
+.bottom-nav-item .bni{font-size:18px;line-height:1;}
+.fab{display:none;position:fixed;bottom:66px;right:16px;z-index:100;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(249,103,0,0.4);align-items:center;justify-content:center;}
+
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:9px 15px;font-size:13px;color:var(--text);z-index:500;animation:slideUp .2s ease;display:none;max-width:calc(100vw - 40px);}
+.toast.show{display:block;}
+@keyframes slideUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+/* RESPONSIVE */
+@media(max-width:700px){
+  .logo-text{display:none;}
+  /* MOBILE FILTER BAR */
+  .mobile-filter-bar{display:flex;}
+  /* TOPBAR */
+  .logo-text{display:none;}
+  .nav-tabs{display:none;}
+  .top-right .btn,.top-right .user-chip span{display:none;}
+
+  /* NAVIGATION */
+  .bottom-nav{display:flex;}
+  .mob-action-bar{display:flex;}
+  .fab{display:none!important;}
+
+  /* BOARD */
+  .board-layout{grid-template-columns:1fr;padding:12px 12px 12px;}
+  .board-left{display:none;}
+  .tasks-header{flex-wrap:wrap;gap:6px;}
+  .tasks-title{font-size:16px;}
+  .search-wrap{width:100%;margin-left:0;order:3;}
+  .sort-select{order:2;}
+
+  /* TASK ROWS — always show actions on mobile */
+  .task-actions-col{opacity:1;}
+  .task-main{padding:9px 6px 9px 2px;}
+  .task-title{font-size:14px;}
+
+  /* PAGES */
+  .page-inner{padding:12px 12px;}
+  .settings-grid{grid-template-columns:1fr;}
+  .settings-card-full{grid-column:1;}
+
+  /* MODAL */
+  .modal{padding:16px 14px;border-radius:12px;}
+  .form-row-2{grid-template-columns:1fr;}
+  .overlay{padding:10px;align-items:flex-end;}
+  .modal{border-radius:16px 16px 0 0;max-height:92vh;}
+
+  /* RICH TASK EDITOR — stack vertically on mobile */
+  .rich-editor-layout{
+    grid-template-columns:1fr;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+  }
+  .rich-editor-left{
+    border-right:none;
+    border-bottom:1px solid var(--border);
+    min-height:220px;
+  }
+  .rich-editor-right{
+    display:block;
+    padding:14px 12px;
+    background:var(--bg3);
+  }
+  .rich-textarea{min-height:180px;}
+  .rich-editor-head{padding:10px 12px;}
+  .rich-title-input{font-size:15px;}
+  .rich-footer{padding:10px 12px;}
+  .rich-section-label{font-size:10px;margin-top:12px;}
+  .rich-section-label:first-child{margin-top:0;}
+
+  /* FILTER — hidden on mobile board (use bottom nav) */
+  .filter-panel{display:none;}
+}
+
+/* Extra small screens */
+@media(max-width:380px){
+  .fab{width:46px;height:46px;font-size:20px;bottom:64px;}
+  .bottom-nav{height:52px;}
+  .bottom-nav-item{font-size:9px;}
+  .bottom-nav-item .bni{font-size:16px;}
+  .task-title{font-size:13px;}
+}
+.attach-zone{border:1.5px dashed var(--border2);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);}
+.attach-zone:hover{border-color:var(--accent);color:var(--accent);}
+.attach-zone.drag-over{border-color:var(--accent);background:var(--accent-glow);}
+.attach-preview{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.attach-thumb{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--border2);}
+.attach-thumb img{display:block;width:80px;height:60px;object-fit:cover;}
+.attach-thumb.is-file{width:auto;height:auto;display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg3);}
+.attach-thumb .attach-name{font-size:11px;color:var(--text2);max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.attach-thumb .attach-del{position:absolute;top:2px;right:2px;width:16px;height:16px;background:rgba(0,0,0,0.7);border-radius:50%;border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.attach-thumb.is-file .attach-del{position:static;background:transparent;color:var(--text3);width:auto;height:auto;font-size:12px;}
+.task-attachments{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.task-attach-img{width:60px;height:44px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer;}
+.task-attach-img:hover{opacity:0.85;}
+.task-attach-file{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text2);cursor:pointer;text-decoration:none;}
+.task-attach-file:hover{border-color:var(--accent);color:var(--accent);}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;display:flex;align-items:center;justify-content:center;cursor:zoom-out;}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;}
+.lightbox.hidden{display:none;}
+.paste-hint{font-size:11px;color:var(--text3);margin-top:4px;}
+.mobile-filter-bar{display:none;padding:8px 12px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.mobile-filter-bar::-webkit-scrollbar{display:none;}
+.mob-filter-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0;background:transparent;font-family:var(--font);}
+.mob-filter-chip:hover{border-color:var(--border3);color:var(--text);}
+.mob-filter-chip.active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+.mob-filter-chip.mob-sort{background:var(--bg3);}
+/* KANBAN */
+.kanban-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;height:100%;overflow:hidden;}
+.kanban-col{display:flex;flex-direction:column;background:var(--bg3);border-radius:10px;overflow:hidden;}
+.kanban-col-head{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:1px solid var(--border);}
+.kanban-col-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);}
+.kanban-col-count{font-size:11px;font-family:var(--mono);color:var(--text3);background:var(--bg4);padding:1px 6px;border-radius:8px;}
+.kanban-col-high .kanban-col-head{border-top:3px solid var(--red);}
+.kanban-col-medium .kanban-col-head{border-top:3px solid var(--amber);}
+.kanban-col-other .kanban-col-head{border-top:3px solid var(--border2);}
+.kanban-cards{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;}
+.kanban-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .12s;}
+.kanban-card:hover{border-color:var(--accent);transform:translateY(-1px);}
+.kanban-card.done{opacity:0.38;}
+.kanban-card-title{font-size:13px;font-weight:500;color:var(--text);line-height:1.35;margin-bottom:5px;}
+.kanban-card.done .kanban-card-title{text-decoration:line-through;color:var(--text3);}
+.kanban-card-note{font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.kanban-card-footer{display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.kanban-card-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:auto;}
+.kanban-card-date.overdue{color:var(--red);}
+.kanban-card-progress{height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:5px;}
+.kanban-card-progress-fill{height:100%;background:var(--green);border-radius:2px;}
+@media(max-width:700px){.kanban-board{grid-template-columns:1fr;height:auto;overflow:visible;}}
+.link-item-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);margin-bottom:5px;}
+.link-item-name{flex:1;font-size:12px;color:var(--accent);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.link-item-url{font-size:10px;color:var(--text3);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;}
+.link-item-del{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:3px;flex-shrink:0;}
+.link-item-del:hover{color:var(--red);}
+.link-add-row{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+.link-add-row .row2{display:flex;gap:6px;}
+.task-link-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.25);border-radius:10px;font-size:11px;color:#7aadff;text-decoration:none;font-family:var(--mono);}
+.task-link-chip:hover{background:rgba(79,142,247,0.18);border-color:var(--accent);}
+.detail-links{display:flex;flex-wrap:wrap;gap:6px;}
+.detail-link-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;font-size:13px;color:var(--accent);text-decoration:none;transition:all .12s;}
+.detail-link-btn:hover{border-color:var(--accent);background:var(--accent-glow);}
+.detail-comment-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;resize:none;min-height:60px;transition:border-color .15s;}
+.detail-comment-input:focus{border-color:var(--accent);}
+.detail-comment-input::placeholder{color:var(--text3);}
+.detail-comment-add{display:flex;justify-content:flex-end;margin-top:6px;}
+.comment-item{padding:8px 10px;background:var(--bg3);border-radius:7px;margin-bottom:5px;}
+.comment-item-text{font-size:13px;color:var(--text2);line-height:1.55;white-space:pre-wrap;}
+.comment-item-meta{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:4px;}
+.history-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);}
+.history-item:last-child{border-bottom:none;}
+.history-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:5px;}
+.history-text{font-size:12px;color:var(--text2);flex:1;}
+.history-time{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;}
+.mob-action-bar{display:none;padding:8px 12px;gap:8px;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;}
+.mob-action-btn{flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;transition:all .12s;}
+.mob-action-btn:hover{background:var(--bg4);}
+.mob-action-btn-orange{background:var(--accent);color:#fff;border-color:var(--accent);}
+.mob-action-btn-orange:hover{background:var(--accent2);}
+.mob-filter-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;display:flex;align-items:flex-end;}
+.mob-filter-overlay.hidden{display:none;}
+.mob-filter-panel{background:var(--bg2);border-radius:16px 16px 0 0;width:100%;max-height:80vh;overflow-y:auto;border-top:2px solid var(--accent);}
+.mob-filter-panel-head{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.mob-filter-section{padding:12px 16px;border-bottom:1px solid var(--border);}
+.mob-filter-section:last-child{border-bottom:none;}
+.mob-filter-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:8px;display:block;}
+.mob-filter-chips-wrap{display:flex;flex-wrap:wrap;gap:6px;}
+.mob-fchip{display:inline-flex;align-items:center;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;background:transparent;font-family:var(--font);}
+.mob-fchip.on{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+.mob-fchip.site-on{background:rgba(249,103,0,0.12);border-color:var(--accent);color:#f9a060;}
+.mob-fchip.person-on{background:rgba(155,127,232,0.12);border-color:#9b7fe8;color:#b8a0f0;}
+.mob-fchip.label-on{background:rgba(41,201,176,0.12);border-color:#29c9b0;color:#30d0b8;}
+.mob-fchip.prio-on{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">WB</div>
+    <div class="login-title">WorkBoard</div>
+    <div class="login-sub">Sign in with your Google account to securely access your tasks.</div>
+    <button class="btn-google" onclick="signInGoogle()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H1.84v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+      Sign in with Google
+    </button>
+    <div class="login-note">Only your account has access to your data.</div>
+  </div>
+</div>
+<div id="loadingScreen" class="hidden"><div class="spinner"></div><p>Loading…</p></div>
+<div class="toast" id="toast"></div>
+
+<!-- QUICK TASK MODAL -->
+<div class="overlay hidden" id="taskOverlay">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">New task</div>
+    <div class="form-field">
+      <label class="form-label">Title</label>
+      <input class="form-input" id="fTitle" placeholder="What needs to be done?" />
+    </div>
+    <div class="form-field">
+      <label class="form-label">Note</label>
+      <textarea class="form-textarea" id="fNote" placeholder="Add more detail…"></textarea>
+    </div>
+    <div class="form-row-2">
+      <div class="form-field">
+        <label class="form-label">Priority</label>
+        <select class="form-select" id="fPriority">
+          <option value="none">— none —</option>
+          <option value="high">🔴 High</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Due date</label>
+        <input class="form-input" type="date" id="fDate" />
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Sites <span class="form-hint">select multiple</span></label>
+      <div class="chip-grid" id="siteChips"></div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">People <span class="form-hint">select multiple</span></label>
+      <div class="chip-grid" id="personChips"></div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Labels <span class="form-hint">select or type new</span></label>
+      <div class="chip-grid" id="projectChips"></div>
+      <div class="tag-input-wrap" id="projectTagWrap">
+        <input class="tag-inline-input" id="projectInput" placeholder="Type new and press Enter…" />
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Action items <span class="form-hint">with assignee</span></label>
+      <div id="actionItemsList"></div>
+      <div class="action-add-row">
+        <input class="form-input" id="actionText" placeholder="Action item…" />
+        <select class="form-select" id="actionAssignee"></select>
+        <button class="btn btn-ghost btn-sm" onclick="addActionItem()" style="flex-shrink:0;">+ Add</button>
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Links <span class="form-hint">name + URL</span></label>
+      <div id="modalLinksList"></div>
+      <div class="link-add-row">
+        <input class="form-input" id="modalLinkName" placeholder="Link name (e.g. Power DK)" />
+        <div class="row2">
+          <input class="form-input" id="modalLinkUrl" placeholder="https://…" style="flex:1;" />
+          <button class="btn btn-ghost btn-sm" onclick="addModalLink()" style="flex-shrink:0;">+ Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Attachments <span class="form-hint">paste screenshot or upload file</span></label>
+      <div class="attach-preview" id="modalAttachPreview"></div>
+      <div class="attach-zone" id="modalAttachZone" onclick="document.getElementById('modalFileInput').click()" ondragover="handleDragOver(event,'modalAttachZone')" ondragleave="handleDragLeave('modalAttachZone')" ondrop="handleDrop(event,'modal')">
+        📎 Click to upload or drag & drop — PNG, JPG, PDF (max 500KB each)
+      </div>
+      <input type="file" id="modalFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(event,'modal')" />
+      <div class="paste-hint">💡 Tip: Ctrl+V to paste a screenshot directly</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTask()">💾 Save task</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="overlay hidden" id="detailOverlay">
+  <div class="detail-modal">
+    <div class="detail-header">
+      <div class="detail-priority-bar" id="detailPriorityBar"></div>
+      <div class="detail-title" id="detailTitle"></div>
+      <div class="detail-meta" id="detailMeta"></div>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+    <div class="detail-footer">
+      <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
+      <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open note</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
+      <div class="check-box" id="detailCheck" style="margin-left:auto;width:18px;height:18px;" onclick="toggleDoneFromDetail()"></div>
+      <span style="font-size:12px;color:var(--text2)" id="detailDoneLabel">Mark done</span>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appShell" style="display:none;flex-direction:column;height:100vh;">
+  <div class="topbar">
+    <div class="logo"><div class="logo-mark">WB</div><span class="logo-text">WorkBoard <span id="logoUserName" style="font-weight:300;opacity:0.6;font-size:12px;"></span></span></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" id="tab-board" onclick="showPage('board')">📋 Board</button>
+      <button class="nav-tab" id="tab-today" onclick="showPage('today')">📅 Today</button>
+      <button class="nav-tab" id="tab-done" onclick="showPage('done')">✅ Done</button>
+      <button class="nav-tab" id="tab-settings" onclick="showPage('settings')">⚙️ Settings</button>
+    </div>
+    <div class="top-right">
+      <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export</button>
+      <button class="btn btn-orange btn-sm" onclick="openRichEditor(null)">+ Note</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal()">+ Task</button>
+      <div class="user-chip" onclick="doSignOut()" title="Sign out">
+        <div class="user-avatar" id="userAvatar"></div>
+        <span id="userInfo">User</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE FILTER BAR (board page only) -->
+  <div class="mobile-filter-bar" id="mobileFilterBar">
+    <button class="mob-filter-chip mob-sort" onclick="cycleMobileSort()">↕ <span id="mobSortLabel">Priority</span></button>
+    <div style="width:1px;background:var(--border2);flex-shrink:0;"></div>
+    <span id="mobSiteChips"></span>
+    <span id="mobPersonChips"></span>
+    <span id="mobLabelChips"></span>
+  </div>
+
+  <!-- BOARD PAGE -->
+  <div id="page-board" class="board-shell">
+    <div class="board-layout">
+      <div class="board-left">
+        <div class="filter-panel" id="filterPanel" style="display:none;">
+          <div class="filter-panel-head">
+            <span class="filter-panel-title">Filter</span>
+            <button class="filter-clear-btn hidden" id="filterClearBtn" onclick="clearFilters()">✕ Clear</button>
+          </div>
+          <div id="filterGroups"></div>
+        </div>
+      </div>
+      <div class="board-right">
+        <div class="tasks-header">
+          <div class="tasks-title">All tasks</div>
+          <span class="tasks-count" id="tasksCount"></span>
+          <select class="sort-select" id="sortSelect" onchange="renderTasks()">
+            <option value="priority">↕ Priority</option>
+            <option value="date">📅 Due date (nearest)</option>
+            <option value="created">🕐 Newest first</option>
+            <option value="oldest">🕑 Oldest first</option>
+            <option value="site">◈ Group by site</option>
+            <option value="person">👤 Group by people</option>
+            <option value="label">🏷 Group by label</option>
+          </select>
+          <div class="view-toggle">
+            <button class="view-btn active" id="viewList" onclick="setViewMode('list')" title="List view">☰</button>
+            <button class="view-btn" id="viewGrid" onclick="setViewMode('grid')" title="Grid view">⊞</button>
+            <button class="view-btn" id="viewKanban" onclick="setViewMode('kanban')" title="Kanban view">⋮⋮⋮</button>
+          </div>
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input id="searchInput" placeholder="Search… (Ctrl+K)" oninput="renderTasks()" />
+          </div>
+        </div>
+        <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ Task" or "📝 Rich task" above.</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TODAY PAGE -->
+  <div id="page-today" class="page-inner" style="display:none;">
+    <div class="tasks-header"><div class="tasks-title">Today</div><span class="tasks-count" id="todayCount"></span></div>
+    <div class="tasks" id="todayList"></div>
+  </div>
+
+  <!-- DONE PAGE -->
+  <div id="page-done" class="page-inner" style="display:none;">
+    <div class="tasks-header"><div class="tasks-title">Completed</div><span class="tasks-count" id="doneCount"></span></div>
+    <div class="tasks" id="doneList"></div>
+  </div>
+
+  <!-- RICH TASK EDITOR PAGE -->
+  <div id="page-rich" style="display:none;flex:1;overflow:hidden;flex-direction:column;">
+    <div class="rich-editor-wrap">
+      <div class="rich-editor-head">
+        <button class="rich-back-btn" onclick="closeRichEditor()">← Back</button>
+        <input class="rich-title-input" id="richTitle" placeholder="Task title…" oninput="richAutoSave()" />
+        <span class="rich-save-status" id="richSaveStatus"></span>
+      </div>
+      <div class="rich-editor-layout">
+        <!-- LEFT: free text -->
+        <div class="rich-editor-left">
+          <div class="rich-body">
+            <textarea class="rich-textarea" id="richBody" placeholder="Write freely — context, background, decisions, meeting notes…&#10;&#10;Use the panel on the right to add structure: priority, due date, sites, people, action items." oninput="richAutoSave()"></textarea>
+          </div>
+          <div class="rich-footer">
+            <button class="btn btn-primary btn-sm" onclick="saveRichTask()">💾 Save to Board</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRichDraft()">🗑 Discard</button>
+            <span style="font-size:11px;color:var(--text3);margin-left:auto" id="richTaskStatus"></span>
+          </div>
+        </div>
+        <!-- RIGHT: structured fields -->
+        <div class="rich-editor-right">
+          <div class="rich-section-label">Priority & date</div>
+          <div class="rich-field form-row-2">
+            <select class="form-select" id="richPriority">
+              <option value="none">— none —</option>
+              <option value="high">🔴 High</option>
+              <option value="medium">🟡 Medium</option>
+              <option value="low">🟢 Low</option>
+            </select>
+            <input class="form-input" type="date" id="richDate" />
+          </div>
+          <div class="rich-section-label">Sites</div>
+          <div class="rich-field chip-grid" id="richSiteChips"></div>
+          <div class="rich-section-label">People</div>
+          <div class="rich-field chip-grid" id="richPersonChips"></div>
+          <div class="rich-section-label">Labels</div>
+          <div class="rich-field">
+            <div class="chip-grid" id="richProjectChips"></div>
+            <div class="tag-input-wrap" id="richProjectTagWrap" style="margin-top:5px;">
+              <input class="tag-inline-input" id="richProjectInput" placeholder="Type new and press Enter…" />
+            </div>
+          </div>
+          <div class="rich-section-label">Action items</div>
+          <div class="rich-field">
+            <div id="richActionsList"></div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <input class="form-input" id="richActionText" placeholder="Describe the action item…" style="width:100%;" />
+              <div style="display:flex;gap:6px;">
+                <select class="form-select" id="richActionAssignee" style="flex:1;"></select>
+                <button class="btn btn-orange btn-sm" onclick="addRichAction()" style="flex-shrink:0;">+ Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="rich-section-label">Links</div>
+          <div class="rich-field">
+            <div id="richLinksList"></div>
+            <div class="link-add-row">
+              <input class="form-input" id="richLinkName" placeholder="Link name (e.g. Power DK)" />
+              <div class="row2">
+                <input class="form-input" id="richLinkUrl" placeholder="https://…" style="flex:1;" />
+                <button class="btn btn-ghost btn-sm" onclick="addRichLink()" style="flex-shrink:0;">+ Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="rich-section-label">Attachments</div>
+          <div class="rich-field">
+            <div class="attach-preview" id="richAttachPreview"></div>
+            <div class="attach-zone" id="richAttachZone" onclick="document.getElementById('richFileInput').click()" ondragover="handleDragOver(event,'richAttachZone')" ondragleave="handleDragLeave('richAttachZone')" ondrop="handleDrop(event,'rich')">
+              📎 Click to upload or drag & drop
+            </div>
+            <input type="file" id="richFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(event,'rich')" />
+            <div class="paste-hint">💡 Ctrl+V to paste screenshot</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div id="page-settings" class="page-inner" style="display:none;">
+    <div class="tasks-header" style="margin-bottom:18px;"><div class="tasks-title">Settings</div></div>
+    <div class="settings-grid">
+      <div class="settings-card">
+        <div class="settings-card-title">Sites</div>
+        <div class="settings-card-sub">Sites you can tag on tasks</div>
+        <div class="settings-list" id="siteSettingsList"></div>
+        <div class="settings-add-row"><input id="newSiteInput" placeholder="New site (e.g. FI)" /><button class="btn btn-primary btn-sm" onclick="addSite()">+ Add</button></div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">People</div>
+        <div class="settings-card-sub">People you can assign to tasks</div>
+        <div class="settings-list" id="personSettingsList"></div>
+        <div class="settings-add-row"><input id="newPersonInput" placeholder="Full name" /><button class="btn btn-primary btn-sm" onclick="addPerson()">+ Add</button></div>
+      </div>
+      <div class="settings-card settings-card-full">
+        <div class="settings-card-title">Labels</div>
+        <div class="settings-card-sub">Saved labels. New labels typed in tasks appear here automatically.</div>
+        <div class="settings-list" id="projectSettingsList"></div>
+        <div class="settings-add-row"><input id="newProjectInput" placeholder="New label" /><button class="btn btn-primary btn-sm" onclick="addProjectTask()">+ Add</button></div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">Data export</div>
+        <div class="settings-card-sub">Download all tasks as JSON backup.</div>
+        <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export backup</button>
+      </div>
+      <div class="settings-card settings-card-full">
+        <div class="settings-card-title">🗑 Trash</div>
+        <div class="settings-card-sub">Recently deleted tasks. Restore or permanently delete.</div>
+        <div class="settings-list" id="trashList" style="max-height:240px;"></div>
+        <button class="btn btn-danger btn-sm" style="margin-top:8px;" onclick="emptyTrash()">Empty trash permanently</button>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">Account</div>
+        <div class="settings-card-sub">Signed in as <span id="settingsEmail" style="color:var(--label)"></span></div>
+        <button class="btn btn-danger btn-sm" onclick="doSignOut()">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <!-- MOBILE ACTION BAR -->
+  <div class="mob-action-bar" id="mobActionBar">
+    <button class="mob-action-btn" onclick="openModal()">+ Task</button>
+    <button class="mob-action-btn mob-action-btn-orange" onclick="openRichEditor(null)">+ Note</button>
+  </div>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="bottom-nav-item active" id="bnav-board" onclick="showPage('board')"><span class="bni">📋</span>Board</button>
+      <button class="bottom-nav-item" id="bnav-today" onclick="showPage('today')"><span class="bni">📅</span>Today</button>
+      <button class="bottom-nav-item" id="bnav-filter" onclick="openMobileFilter()"><span class="bni">⚡</span>Filter</button>
+      <button class="bottom-nav-item" id="bnav-done" onclick="showPage('done')"><span class="bni">✅</span>Done</button>
+      <button class="bottom-nav-item" id="bnav-settings" onclick="showPage('settings')"><span class="bni">⚙️</span>Settings</button>
+    </div>
+  </div>
+</div>
+
+<script></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
+<style>
+:root{
+  --bg:#1a1a1a;--bg2:#252525;--bg3:#2e2e2e;--bg4:#383838;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--border3:rgba(255,255,255,0.24);
+  --text:#f0f0f0;--text2:#b0b0b0;--text3:#949494;--label:#e8e8e8;
+  --accent:#F96700;--accent2:#d45500;
+  --accent-glow:rgba(249,103,0,0.15);
+  --green:#2ec97e;--amber:#FFE100;--red:#FF3927;--teal:#22c4ac;--purple:#9b7fe8;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+/* LOGIN */
+#loginScreen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+#loginScreen.hidden{display:none;}
+#loadingScreen{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;}
+#loadingScreen.hidden{display:none;}
+.login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:40px 32px;width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;}
+.login-logo{width:50px;height:50px;background:var(--accent);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;}
+.login-title{font-size:20px;font-weight:600;}
+.login-sub{font-size:13px;color:var(--text2);line-height:1.6;}
+.btn-google{display:flex;align-items:center;gap:10px;padding:12px 20px;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;width:100%;justify-content:center;}
+.btn-google:hover{background:var(--bg4);border-color:var(--border3);}
+.login-note{font-size:11px;color:var(--text3);}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loadingScreen p{color:var(--text2);font-size:13px;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:13px;font-family:var(--font);font-weight:500;cursor:pointer;border:none;transition:all .15s;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);}
+.btn-ghost:hover{background:var(--bg3);color:var(--text);border-color:var(--border3);}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px;}
+.btn-danger{background:rgba(255,57,39,0.1);border:1px solid rgba(255,57,39,0.25);color:var(--red);}
+.btn-danger:hover{background:rgba(255,57,39,0.2);}
+.btn-orange{background:var(--accent);color:#fff;}
+.btn-orange:hover{background:var(--accent2);}
+
+/* TOPBAR */
+.topbar{height:50px;background:var(--bg2);border-bottom:2px solid var(--accent);display:flex;align-items:center;padding:0 16px;gap:0;flex-shrink:0;}
+.logo{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px;white-space:nowrap;margin-right:14px;}
+.logo-mark{width:24px;height:24px;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;}
+.logo-text{display:inline;}
+.nav-tabs{display:flex;gap:1px;overflow-x:auto;}
+.nav-tabs::-webkit-scrollbar{display:none;}
+.nav-tab{display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:6px;cursor:pointer;color:var(--text2);font-size:13px;font-weight:500;transition:all .12s;border:none;background:transparent;font-family:var(--font);white-space:nowrap;flex-shrink:0;}
+.nav-tab:hover{background:var(--bg3);color:var(--text);}
+.nav-tab.active{background:var(--accent-glow);color:var(--accent);}
+.nav-badge{background:var(--accent);color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;font-family:var(--mono);}
+.top-right{margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0;}
+.user-chip{display:flex;align-items:center;gap:6px;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text2);cursor:pointer;}
+.user-chip:hover{border-color:var(--border2);color:var(--text);}
+.user-avatar{width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff;overflow:hidden;flex-shrink:0;}
+.user-avatar img{width:100%;height:100%;object-fit:cover;}
+
+/* PAGES */
+.page-inner{flex:1;overflow-y:auto;padding:20px 24px;-webkit-overflow-scrolling:touch;}
+
+/* BOARD */
+.board-shell{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.board-layout{flex:1;display:grid;grid-template-columns:220px 1fr;gap:16px;overflow:hidden;padding:20px 24px;}
+.board-left{overflow-y:auto;}
+.board-right{overflow-y:auto;}
+
+/* FILTER PANEL */
+.filter-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.filter-panel-head{padding:10px 13px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.filter-panel-title{font-size:11px;font-weight:600;color:var(--label);text-transform:uppercase;letter-spacing:0.3px;}
+.filter-clear-btn{font-size:11px;color:var(--red);cursor:pointer;padding:2px 7px;border-radius:4px;border:none;background:transparent;font-family:var(--font);}
+.filter-clear-btn:hover{background:rgba(224,72,72,0.1);}
+.filter-clear-btn.hidden{display:none;}
+.filter-group{padding:8px 13px;border-bottom:1px solid var(--border);}
+.filter-group:last-child{border-bottom:none;}
+.filter-group-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:5px;display:block;}
+.filter-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.fchip{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;transition:all .1s;background:transparent;font-family:var(--font);}
+.fchip:hover{border-color:var(--border3);color:var(--label);}
+.fchip.fs{color:#7aadff;border-color:rgba(79,142,247,0.3);background:rgba(79,142,247,0.06);}
+.fchip.fp{color:#b8a0f0;border-color:rgba(155,127,232,0.3);background:rgba(155,127,232,0.06);}
+.fchip.ft{color:#30d0b8;border-color:rgba(41,201,176,0.3);background:rgba(41,201,176,0.06);}
+.fchip.fpr.high{color:#f07878;border-color:rgba(224,72,72,0.3);background:rgba(224,72,72,0.06);}
+.fchip.fpr.medium{color:#f0b060;border-color:rgba(232,150,42,0.3);background:rgba(232,150,42,0.06);}
+.fchip.fpr.low{color:#50d898;border-color:rgba(46,201,126,0.3);background:rgba(46,201,126,0.06);}
+.fchip.on.fs{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.fchip.on.fp{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.fchip.on.ft{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.fchip.on.fpr{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+
+/* TASKS HEADER */
+.tasks-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.view-toggle{display:flex;gap:2px;background:var(--bg3);border-radius:6px;padding:2px;}
+.view-btn{background:transparent;border:none;border-radius:5px;padding:5px 8px;cursor:pointer;color:var(--text3);font-size:13px;transition:all .12s;}
+.view-btn.active{background:var(--bg4);color:var(--label);}
+.view-btn:hover{color:var(--text);}
+
+/* CARD GRID VIEW */
+.tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
+.task-card-grid{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 14px 10px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:5px;min-height:120px;max-height:150px;overflow:hidden;position:relative;}
+.task-card-grid:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 16px rgba(249,103,0,0.12);}
+.task-card-grid.done{opacity:0.38;}
+.card-stripe{position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;}
+.card-stripe-high{background:var(--red);}
+.card-stripe-medium{background:var(--amber);}
+.card-stripe-low{background:var(--green);}
+.card-stripe-none{display:none;}
+.card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.35;padding-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.task-card-grid.done .card-title{text-decoration:line-through;color:var(--text3);}
+.card-note{font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.card-footer{margin-top:auto;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.card-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:auto;}
+.card-date.overdue{color:var(--red);}
+.card-actions{display:none;}
+.card-check{display:none;}
+.card-progress{height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:2px;}
+.card-progress-fill{height:100%;background:var(--green);border-radius:2px;}
+.card-attach-count{font-size:10px;color:var(--text3);}
+.grid-section-label{grid-column:1/-1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--label);display:flex;align-items:center;gap:8px;padding-bottom:2px;}
+.grid-section-line{flex:1;height:1px;background:var(--border2);}
+.grid-section-count{font-size:10px;font-family:var(--mono);color:var(--text3);font-weight:400;}
+.tasks-title{font-size:15px;font-weight:600;color:var(--text);}
+.tasks-count{font-size:12px;color:var(--text3);font-family:var(--mono);}
+.sort-select{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--label);font-family:var(--font);font-size:12px;outline:none;cursor:pointer;}
+.sort-select option{background:var(--bg3);}
+.search-wrap{margin-left:auto;position:relative;width:200px;}
+.search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 10px 6px 28px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;transition:border-color .15s;}
+.search-wrap input:focus{border-color:var(--accent);}
+.search-wrap input::placeholder{color:var(--text3);}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:12px;pointer-events:none;}
+
+/* DETAIL MODAL */
+.detail-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:0;width:100%;max-width:600px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;}
+.detail-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.detail-priority-bar{height:3px;border-radius:3px;margin-bottom:14px;}
+.detail-title{font-size:17px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:8px;}
+.detail-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.detail-body{overflow-y:auto;padding:18px 20px;flex:1;}
+.detail-section{margin-bottom:16px;}
+.detail-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:6px;}
+.detail-note{font-size:13px;color:var(--text2);line-height:1.65;white-space:pre-wrap;}
+.detail-rich-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--accent);}
+.detail-actions-list{display:flex;flex-direction:column;gap:5px;}
+.detail-action-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:7px;}
+.detail-action-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;}
+.detail-action-check:hover{border-color:var(--green);}
+.detail-action-check.done{background:var(--green);border-color:var(--green);}
+.detail-action-check.done::after{content:"✓";color:#03200e;font-size:8px;font-weight:700;}
+.detail-action-text{flex:1;font-size:13px;color:var(--text);}
+.detail-action-text.done{text-decoration:line-through;color:var(--text3);}
+.detail-action-assignee{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg4);padding:1px 6px;border-radius:8px;}
+.detail-attachments{display:flex;flex-wrap:wrap;gap:8px;}
+.detail-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+
+/* TASK ROWS */
+.tasks{display:flex;flex-direction:column;gap:1px;}
+.task-row-wrap{display:flex;align-items:stretch;border-radius:6px;transition:background .1s;border:1px solid transparent;}
+.task-row-wrap:hover{background:var(--bg2);border-color:var(--border);}
+.task-row-wrap.done{opacity:0.35;}
+.task-stripe{width:3px;border-radius:3px 0 0 3px;flex-shrink:0;align-self:stretch;}
+.stripe-high{background:var(--red);}
+.stripe-medium{background:var(--amber);}
+.stripe-low{background:var(--green);}
+.stripe-none{background:transparent;}
+.task-check{width:28px;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;flex-shrink:0;}
+.check-box{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;user-select:none;}
+.check-box:hover{border-color:var(--green);}
+.check-box.checked{background:var(--green);border-color:var(--green);}
+.check-box.checked::after{content:'✓';color:#03200e;font-size:8px;font-weight:700;}
+.task-main{flex:1;padding:6px 6px 6px 2px;min-width:0;}
+.task-title-row{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
+.task-title{font-size:13px;font-weight:500;color:var(--text);line-height:1.35;}
+.task-row-wrap.done .task-title{text-decoration:line-through;color:var(--text3);}
+.task-meta-inline{display:flex;flex-wrap:wrap;gap:3px;align-items:center;}
+.task-date-inline{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg3);padding:1px 5px;border-radius:4px;}
+.task-date-inline.overdue{color:var(--red);background:rgba(255,57,39,0.1);}
+.task-tags-row{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-top:2px;}
+.task-note-row{font-size:11px;color:var(--text3);margin-top:2px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.task-note-row.expanded{white-space:pre-wrap;overflow:visible;}
+.task-en-row{font-size:11px;color:var(--text3);background:var(--bg3);border-left:2px solid var(--accent);border-radius:0 4px 4px 0;padding:3px 8px;margin-top:3px;font-style:italic;}
+.itag{padding:1px 5px;border-radius:8px;font-size:10px;font-weight:500;font-family:var(--mono);}
+.itag-s{background:rgba(249,103,0,0.12);color:#f9a060;}
+.itag-p{background:rgba(155,127,232,0.12);color:#b8a0f0;}
+.itag-t{background:rgba(41,201,176,0.12);color:#30d0b8;}
+.task-actions-col{display:none;}
+.ia{background:transparent;border:none;padding:3px 5px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--text3);font-family:var(--font);transition:all .1s;}
+.ia:hover{background:var(--bg3);color:var(--label);}
+.ia.del:hover{color:var(--red);}
+
+/* ACTION PROGRESS */
+.action-progress{display:flex;align-items:center;gap:5px;margin-top:3px;}
+.action-progress-bar{width:48px;height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;flex-shrink:0;}
+.action-progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width .3s;}
+.action-progress-text{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;}
+
+.section-divider{display:flex;align-items:center;gap:8px;margin:18px 0 6px;}
+.section-divider-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--label);display:flex;align-items:center;gap:5px;}
+.section-divider-count{font-size:10px;font-family:var(--mono);color:var(--text3);font-weight:400;}
+.section-divider-line{flex:1;height:1px;background:var(--border2);}
+.section-divider.grouped{margin:20px 0 8px;}
+.section-divider.grouped .section-divider-label{font-size:12px;color:var(--accent);letter-spacing:0.5px;background:var(--accent-glow);padding:4px 10px;border-radius:6px;border:1px solid rgba(249,103,0,0.25);}
+.section-divider.grouped .section-divider-count{color:var(--accent);opacity:0.7;}
+.section-divider.grouped .section-divider-line{background:rgba(249,103,0,0.2);}
+.empty{text-align:center;padding:40px 20px;color:var(--text3);}
+.empty-icon{font-size:26px;margin-bottom:8px;}
+.empty p{font-size:13px;line-height:1.6;}
+
+/* QUICK TASK MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px);}
+.overlay.hidden{display:none;}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:22px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;}
+.modal-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:18px;}
+.form-field{margin-bottom:12px;}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--label);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;}
+.form-hint{font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px;}
+.form-input,.form-textarea,.form-select{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s;resize:none;}
+.form-input:focus,.form-textarea:focus,.form-select:focus{border-color:var(--accent);}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--text3);}
+.form-textarea{min-height:70px;}
+.form-select{cursor:pointer;}
+.form-select option{background:var(--bg3);}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+input[type="date"]{color-scheme:dark;}
+input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1) hue-rotate(190deg);cursor:pointer;opacity:0.7;}
+.chip-grid{display:flex;flex-wrap:wrap;gap:5px;}
+.ms-chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;transition:all .1s;background:transparent;font-family:var(--font);user-select:none;}
+.ms-chip:hover{border-color:var(--border3);color:var(--label);}
+.ms-chip.sel-s{background:var(--accent-glow);border-color:var(--accent);color:#ffaa66;}
+.ms-chip.sel-p{background:rgba(155,127,232,0.14);border-color:#9b7fe8;color:#b8a0f0;}
+.ms-chip.sel-t{background:rgba(41,201,176,0.14);border-color:#29c9b0;color:#30d0b8;}
+.tag-input-wrap{display:flex;flex-wrap:wrap;gap:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:7px;min-height:36px;cursor:text;transition:border-color .15s;margin-top:5px;}
+.tag-input-wrap:focus-within{border-color:var(--accent);}
+.tag-input-wrap .itag{cursor:pointer;}
+.tag-input-wrap .itag:hover{opacity:0.7;}
+.tag-inline-input{background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:13px;min-width:100px;flex:1;}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);}
+
+/* ACTION ITEMS IN MODAL */
+.action-item-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);margin-bottom:5px;}
+.action-item-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+.action-item-check:hover{border-color:var(--green);}
+.action-item-check.done{background:var(--green);border-color:var(--green);}
+.action-item-check.done::after{content:'✓';color:#03200e;font-size:8px;font-weight:700;}
+.action-item-text{flex:1;font-size:12px;color:var(--text);}
+.action-item-text.done{text-decoration:line-through;color:var(--text3);}
+.action-item-assignee{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg4);padding:1px 6px;border-radius:8px;white-space:nowrap;}
+.action-item-del{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:3px;}
+.action-item-del:hover{color:var(--red);}
+.action-add-row{display:flex;gap:6px;align-items:center;margin-top:4px;}
+.action-add-row .form-input{flex:1;}
+.action-add-row .form-select{width:110px;flex-shrink:0;padding:7px 8px;}
+
+/* RICH TASK EDITOR PAGE */
+.rich-editor-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden;}
+.rich-editor-layout{flex:1;display:grid;grid-template-columns:3fr 2fr;gap:0;overflow:hidden;}
+.rich-editor-left{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);}
+.rich-editor-right{overflow-y:auto;padding:20px;background:var(--bg3);}
+.rich-editor-head{padding:14px 20px 12px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.rich-back-btn{background:transparent;border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.rich-back-btn:hover{background:var(--bg3);color:var(--text);}
+.rich-title-input{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:16px;font-weight:600;color:var(--text);min-width:0;}
+.rich-title-input::placeholder{color:var(--text3);}
+.rich-save-status{font-size:11px;color:var(--text3);white-space:nowrap;}
+.rich-body{flex:1;overflow-y:auto;padding:16px 20px;}
+.rich-textarea{width:100%;flex:1;background:transparent;border:none;outline:none;resize:none;font-family:var(--font);font-size:14px;color:var(--text2);line-height:1.8;min-height:400px;}
+.rich-textarea::placeholder{color:var(--text3);}
+.rich-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:8px;margin-top:16px;}
+.rich-section-label:first-child{margin-top:0;}
+.rich-field{margin-bottom:14px;}
+.rich-actions-list{display:flex;flex-direction:column;gap:5px;margin-bottom:6px;}
+.rich-footer{padding:12px 20px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+
+/* SETTINGS */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:780px;}
+.settings-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
+.settings-card-full{grid-column:1/-1;}
+.settings-card-title{font-size:13px;font-weight:600;color:var(--label);margin-bottom:2px;}
+.settings-card-sub{font-size:12px;color:var(--text3);margin-bottom:12px;}
+.settings-list{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;max-height:160px;overflow-y:auto;}
+.settings-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg3);border-radius:6px;}
+.settings-item-name{font-size:13px;color:var(--text);}
+.settings-add-row{display:flex;gap:7px;}
+.settings-add-row input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;}
+.settings-add-row input:focus{border-color:var(--accent);}
+.settings-add-row input::placeholder{color:var(--text3);}
+
+/* MOBILE BOTTOM NAV */
+.bottom-nav{display:none;height:56px;background:var(--bg2);border-top:2px solid var(--accent);flex-shrink:0;}
+.bottom-nav-inner{display:flex;height:100%;}
+.bottom-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text3);font-size:10px;font-weight:500;border:none;background:transparent;font-family:var(--font);transition:color .12s;padding:0;}
+.bottom-nav-item.active{color:var(--accent);font-weight:600;}
+.bottom-nav-item .bni{font-size:18px;line-height:1;}
+.fab{display:none;position:fixed;bottom:66px;right:16px;z-index:100;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(249,103,0,0.4);align-items:center;justify-content:center;}
+
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:9px 15px;font-size:13px;color:var(--text);z-index:500;animation:slideUp .2s ease;display:none;max-width:calc(100vw - 40px);}
+.toast.show{display:block;}
+@keyframes slideUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+/* RESPONSIVE */
+@media(max-width:700px){
+  .logo-text{display:none;}
+  /* MOBILE FILTER BAR */
+  .mobile-filter-bar{display:flex;}
+  /* TOPBAR */
+  .logo-text{display:none;}
+  .nav-tabs{display:none;}
+  .top-right .btn,.top-right .user-chip span{display:none;}
+
+  /* NAVIGATION */
+  .bottom-nav{display:flex;}
+  .mob-action-bar{display:flex;}
+  .fab{display:none!important;}
+
+  /* BOARD */
+  .board-layout{grid-template-columns:1fr;padding:12px 12px 12px;}
+  .board-left{display:none;}
+  .tasks-header{flex-wrap:wrap;gap:6px;}
+  .tasks-title{font-size:16px;}
+  .search-wrap{width:100%;margin-left:0;order:3;}
+  .sort-select{order:2;}
+
+  /* TASK ROWS — always show actions on mobile */
+  .task-actions-col{opacity:1;}
+  .task-main{padding:9px 6px 9px 2px;}
+  .task-title{font-size:14px;}
+
+  /* PAGES */
+  .page-inner{padding:12px 12px;}
+  .settings-grid{grid-template-columns:1fr;}
+  .settings-card-full{grid-column:1;}
+
+  /* MODAL */
+  .modal{padding:16px 14px;border-radius:12px;}
+  .form-row-2{grid-template-columns:1fr;}
+  .overlay{padding:10px;align-items:flex-end;}
+  .modal{border-radius:16px 16px 0 0;max-height:92vh;}
+
+  /* RICH TASK EDITOR — stack vertically on mobile */
+  .rich-editor-layout{
+    grid-template-columns:1fr;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+  }
+  .rich-editor-left{
+    border-right:none;
+    border-bottom:1px solid var(--border);
+    min-height:220px;
+  }
+  .rich-editor-right{
+    display:block;
+    padding:14px 12px;
+    background:var(--bg3);
+  }
+  .rich-textarea{min-height:180px;}
+  .rich-editor-head{padding:10px 12px;}
+  .rich-title-input{font-size:15px;}
+  .rich-footer{padding:10px 12px;}
+  .rich-section-label{font-size:10px;margin-top:12px;}
+  .rich-section-label:first-child{margin-top:0;}
+
+  /* FILTER — hidden on mobile board (use bottom nav) */
+  .filter-panel{display:none;}
+}
+
+/* Extra small screens */
+@media(max-width:380px){
+  .fab{width:46px;height:46px;font-size:20px;bottom:64px;}
+  .bottom-nav{height:52px;}
+  .bottom-nav-item{font-size:9px;}
+  .bottom-nav-item .bni{font-size:16px;}
+  .task-title{font-size:13px;}
+}
+.attach-zone{border:1.5px dashed var(--border2);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);}
+.attach-zone:hover{border-color:var(--accent);color:var(--accent);}
+.attach-zone.drag-over{border-color:var(--accent);background:var(--accent-glow);}
+.attach-preview{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.attach-thumb{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--border2);}
+.attach-thumb img{display:block;width:80px;height:60px;object-fit:cover;}
+.attach-thumb.is-file{width:auto;height:auto;display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg3);}
+.attach-thumb .attach-name{font-size:11px;color:var(--text2);max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.attach-thumb .attach-del{position:absolute;top:2px;right:2px;width:16px;height:16px;background:rgba(0,0,0,0.7);border-radius:50%;border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.attach-thumb.is-file .attach-del{position:static;background:transparent;color:var(--text3);width:auto;height:auto;font-size:12px;}
+.task-attachments{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.task-attach-img{width:60px;height:44px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer;}
+.task-attach-img:hover{opacity:0.85;}
+.task-attach-file{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text2);cursor:pointer;text-decoration:none;}
+.task-attach-file:hover{border-color:var(--accent);color:var(--accent);}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;display:flex;align-items:center;justify-content:center;cursor:zoom-out;}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;}
+.lightbox.hidden{display:none;}
+.paste-hint{font-size:11px;color:var(--text3);margin-top:4px;}
+.mobile-filter-bar{display:none;padding:8px 12px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.mobile-filter-bar::-webkit-scrollbar{display:none;}
+.mob-filter-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0;background:transparent;font-family:var(--font);}
+.mob-filter-chip:hover{border-color:var(--border3);color:var(--text);}
+.mob-filter-chip.active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+.mob-filter-chip.mob-sort{background:var(--bg3);}
+/* KANBAN */
+.kanban-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;height:100%;overflow:hidden;}
+.kanban-col{display:flex;flex-direction:column;background:var(--bg3);border-radius:10px;overflow:hidden;}
+.kanban-col-head{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:1px solid var(--border);}
+.kanban-col-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);}
+.kanban-col-count{font-size:11px;font-family:var(--mono);color:var(--text3);background:var(--bg4);padding:1px 6px;border-radius:8px;}
+.kanban-col-high .kanban-col-head{border-top:3px solid var(--red);}
+.kanban-col-medium .kanban-col-head{border-top:3px solid var(--amber);}
+.kanban-col-other .kanban-col-head{border-top:3px solid var(--border2);}
+.kanban-cards{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;}
+.kanban-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .12s;}
+.kanban-card:hover{border-color:var(--accent);transform:translateY(-1px);}
+.kanban-card.done{opacity:0.38;}
+.kanban-card-title{font-size:13px;font-weight:500;color:var(--text);line-height:1.35;margin-bottom:5px;}
+.kanban-card.done .kanban-card-title{text-decoration:line-through;color:var(--text3);}
+.kanban-card-note{font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.kanban-card-footer{display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.kanban-card-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:auto;}
+.kanban-card-date.overdue{color:var(--red);}
+.kanban-card-progress{height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:5px;}
+.kanban-card-progress-fill{height:100%;background:var(--green);border-radius:2px;}
+@media(max-width:700px){.kanban-board{grid-template-columns:1fr;height:auto;overflow:visible;}}
+.link-item-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);margin-bottom:5px;}
+.link-item-name{flex:1;font-size:12px;color:var(--accent);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.link-item-url{font-size:10px;color:var(--text3);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;}
+.link-item-del{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:3px;flex-shrink:0;}
+.link-item-del:hover{color:var(--red);}
+.link-add-row{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+.link-add-row .row2{display:flex;gap:6px;}
+.task-link-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.25);border-radius:10px;font-size:11px;color:#7aadff;text-decoration:none;font-family:var(--mono);}
+.task-link-chip:hover{background:rgba(79,142,247,0.18);border-color:var(--accent);}
+.detail-links{display:flex;flex-wrap:wrap;gap:6px;}
+.detail-link-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;font-size:13px;color:var(--accent);text-decoration:none;transition:all .12s;}
+.detail-link-btn:hover{border-color:var(--accent);background:var(--accent-glow);}
+.detail-comment-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;resize:none;min-height:60px;transition:border-color .15s;}
+.detail-comment-input:focus{border-color:var(--accent);}
+.detail-comment-input::placeholder{color:var(--text3);}
+.detail-comment-add{display:flex;justify-content:flex-end;margin-top:6px;}
+.comment-item{padding:8px 10px;background:var(--bg3);border-radius:7px;margin-bottom:5px;}
+.comment-item-text{font-size:13px;color:var(--text2);line-height:1.55;white-space:pre-wrap;}
+.comment-item-meta{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:4px;}
+.history-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);}
+.history-item:last-child{border-bottom:none;}
+.history-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:5px;}
+.history-text{font-size:12px;color:var(--text2);flex:1;}
+.history-time{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;}
+.mob-action-bar{display:none;padding:8px 12px;gap:8px;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;}
+.mob-action-btn{flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;transition:all .12s;}
+.mob-action-btn:hover{background:var(--bg4);}
+.mob-action-btn-orange{background:var(--accent);color:#fff;border-color:var(--accent);}
+.mob-action-btn-orange:hover{background:var(--accent2);}
+.mob-filter-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;display:flex;align-items:flex-end;}
+.mob-filter-overlay.hidden{display:none;}
+.mob-filter-panel{background:var(--bg2);border-radius:16px 16px 0 0;width:100%;max-height:80vh;overflow-y:auto;border-top:2px solid var(--accent);}
+.mob-filter-panel-head{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.mob-filter-section{padding:12px 16px;border-bottom:1px solid var(--border);}
+.mob-filter-section:last-child{border-bottom:none;}
+.mob-filter-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:8px;display:block;}
+.mob-filter-chips-wrap{display:flex;flex-wrap:wrap;gap:6px;}
+.mob-fchip{display:inline-flex;align-items:center;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid var(--border2);color:var(--text2);cursor:pointer;background:transparent;font-family:var(--font);}
+.mob-fchip.on{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+.mob-fchip.site-on{background:rgba(249,103,0,0.12);border-color:var(--accent);color:#f9a060;}
+.mob-fchip.person-on{background:rgba(155,127,232,0.12);border-color:#9b7fe8;color:#b8a0f0;}
+.mob-fchip.label-on{background:rgba(41,201,176,0.12);border-color:#29c9b0;color:#30d0b8;}
+.mob-fchip.prio-on{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">WB</div>
+    <div class="login-title">WorkBoard</div>
+    <div class="login-sub">Sign in with your Google account to securely access your tasks.</div>
+    <button class="btn-google" onclick="signInGoogle()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H1.84v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+      Sign in with Google
+    </button>
+    <div class="login-note">Only your account has access to your data.</div>
+  </div>
+</div>
+<div id="loadingScreen" class="hidden"><div class="spinner"></div><p>Loading…</p></div>
+<div class="toast" id="toast"></div>
+
+<!-- QUICK TASK MODAL -->
+<div class="overlay hidden" id="taskOverlay">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">New task</div>
+    <div class="form-field">
+      <label class="form-label">Title</label>
+      <input class="form-input" id="fTitle" placeholder="What needs to be done?" />
+    </div>
+    <div class="form-field">
+      <label class="form-label">Note</label>
+      <textarea class="form-textarea" id="fNote" placeholder="Add more detail…"></textarea>
+    </div>
+    <div class="form-row-2">
+      <div class="form-field">
+        <label class="form-label">Priority</label>
+        <select class="form-select" id="fPriority">
+          <option value="none">— none —</option>
+          <option value="high">🔴 High</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Due date</label>
+        <input class="form-input" type="date" id="fDate" />
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Sites <span class="form-hint">select multiple</span></label>
+      <div class="chip-grid" id="siteChips"></div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">People <span class="form-hint">select multiple</span></label>
+      <div class="chip-grid" id="personChips"></div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Labels <span class="form-hint">select or type new</span></label>
+      <div class="chip-grid" id="projectChips"></div>
+      <div class="tag-input-wrap" id="projectTagWrap">
+        <input class="tag-inline-input" id="projectInput" placeholder="Type new and press Enter…" />
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Action items <span class="form-hint">with assignee</span></label>
+      <div id="actionItemsList"></div>
+      <div class="action-add-row">
+        <input class="form-input" id="actionText" placeholder="Action item…" />
+        <select class="form-select" id="actionAssignee"></select>
+        <button class="btn btn-ghost btn-sm" onclick="addActionItem()" style="flex-shrink:0;">+ Add</button>
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Links <span class="form-hint">name + URL</span></label>
+      <div id="modalLinksList"></div>
+      <div class="link-add-row">
+        <input class="form-input" id="modalLinkName" placeholder="Link name (e.g. Power DK)" />
+        <div class="row2">
+          <input class="form-input" id="modalLinkUrl" placeholder="https://…" style="flex:1;" />
+          <button class="btn btn-ghost btn-sm" onclick="addModalLink()" style="flex-shrink:0;">+ Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Attachments <span class="form-hint">paste screenshot or upload file</span></label>
+      <div class="attach-preview" id="modalAttachPreview"></div>
+      <div class="attach-zone" id="modalAttachZone" onclick="document.getElementById('modalFileInput').click()" ondragover="handleDragOver(event,'modalAttachZone')" ondragleave="handleDragLeave('modalAttachZone')" ondrop="handleDrop(event,'modal')">
+        📎 Click to upload or drag & drop — PNG, JPG, PDF (max 500KB each)
+      </div>
+      <input type="file" id="modalFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(event,'modal')" />
+      <div class="paste-hint">💡 Tip: Ctrl+V to paste a screenshot directly</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTask()">💾 Save task</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="overlay hidden" id="detailOverlay">
+  <div class="detail-modal">
+    <div class="detail-header">
+      <div class="detail-priority-bar" id="detailPriorityBar"></div>
+      <div class="detail-title" id="detailTitle"></div>
+      <div class="detail-meta" id="detailMeta"></div>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+    <div class="detail-footer">
+      <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
+      <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open note</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
+      <div class="check-box" id="detailCheck" style="margin-left:auto;width:18px;height:18px;" onclick="toggleDoneFromDetail()"></div>
+      <span style="font-size:12px;color:var(--text2)" id="detailDoneLabel">Mark done</span>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appShell" style="display:none;flex-direction:column;height:100vh;">
+  <div class="topbar">
+    <div class="logo"><div class="logo-mark">WB</div><span class="logo-text">WorkBoard <span id="logoUserName" style="font-weight:300;opacity:0.6;font-size:12px;"></span></span></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" id="tab-board" onclick="showPage('board')">📋 Board</button>
+      <button class="nav-tab" id="tab-today" onclick="showPage('today')">📅 Today</button>
+      <button class="nav-tab" id="tab-done" onclick="showPage('done')">✅ Done</button>
+      <button class="nav-tab" id="tab-settings" onclick="showPage('settings')">⚙️ Settings</button>
+    </div>
+    <div class="top-right">
+      <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export</button>
+      <button class="btn btn-orange btn-sm" onclick="openRichEditor(null)">+ Note</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal()">+ Task</button>
+      <div class="user-chip" onclick="doSignOut()" title="Sign out">
+        <div class="user-avatar" id="userAvatar"></div>
+        <span id="userInfo">User</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE FILTER BAR (board page only) -->
+  <div class="mobile-filter-bar" id="mobileFilterBar">
+    <button class="mob-filter-chip mob-sort" onclick="cycleMobileSort()">↕ <span id="mobSortLabel">Priority</span></button>
+    <div style="width:1px;background:var(--border2);flex-shrink:0;"></div>
+    <span id="mobSiteChips"></span>
+    <span id="mobPersonChips"></span>
+    <span id="mobLabelChips"></span>
+  </div>
+
+  <!-- BOARD PAGE -->
+  <div id="page-board" class="board-shell">
+    <div class="board-layout">
+      <div class="board-left">
+        <div class="filter-panel" id="filterPanel" style="display:none;">
+          <div class="filter-panel-head">
+            <span class="filter-panel-title">Filter</span>
+            <button class="filter-clear-btn hidden" id="filterClearBtn" onclick="clearFilters()">✕ Clear</button>
+          </div>
+          <div id="filterGroups"></div>
+        </div>
+      </div>
+      <div class="board-right">
+        <div class="tasks-header">
+          <div class="tasks-title">All tasks</div>
+          <span class="tasks-count" id="tasksCount"></span>
+          <select class="sort-select" id="sortSelect" onchange="renderTasks()">
+            <option value="priority">↕ Priority</option>
+            <option value="date">📅 Due date (nearest)</option>
+            <option value="created">🕐 Newest first</option>
+            <option value="oldest">🕑 Oldest first</option>
+            <option value="site">◈ Group by site</option>
+            <option value="person">👤 Group by people</option>
+            <option value="label">🏷 Group by label</option>
+          </select>
+          <div class="view-toggle">
+            <button class="view-btn active" id="viewList" onclick="setViewMode('list')" title="List view">☰</button>
+            <button class="view-btn" id="viewGrid" onclick="setViewMode('grid')" title="Grid view">⊞</button>
+            <button class="view-btn" id="viewKanban" onclick="setViewMode('kanban')" title="Kanban view">⋮⋮⋮</button>
+          </div>
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input id="searchInput" placeholder="Search… (Ctrl+K)" oninput="renderTasks()" />
+          </div>
+        </div>
+        <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ Task" or "📝 Rich task" above.</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TODAY PAGE -->
+  <div id="page-today" class="page-inner" style="display:none;">
+    <div class="tasks-header"><div class="tasks-title">Today</div><span class="tasks-count" id="todayCount"></span></div>
+    <div class="tasks" id="todayList"></div>
+  </div>
+
+  <!-- DONE PAGE -->
+  <div id="page-done" class="page-inner" style="display:none;">
+    <div class="tasks-header"><div class="tasks-title">Completed</div><span class="tasks-count" id="doneCount"></span></div>
+    <div class="tasks" id="doneList"></div>
+  </div>
+
+  <!-- RICH TASK EDITOR PAGE -->
+  <div id="page-rich" style="display:none;flex:1;overflow:hidden;flex-direction:column;">
+    <div class="rich-editor-wrap">
+      <div class="rich-editor-head">
+        <button class="rich-back-btn" onclick="closeRichEditor()">← Back</button>
+        <input class="rich-title-input" id="richTitle" placeholder="Task title…" oninput="richAutoSave()" />
+        <span class="rich-save-status" id="richSaveStatus"></span>
+      </div>
+      <div class="rich-editor-layout">
+        <!-- LEFT: free text -->
+        <div class="rich-editor-left">
+          <div class="rich-body">
+            <textarea class="rich-textarea" id="richBody" placeholder="Write freely — context, background, decisions, meeting notes…&#10;&#10;Use the panel on the right to add structure: priority, due date, sites, people, action items." oninput="richAutoSave()"></textarea>
+          </div>
+          <div class="rich-footer">
+            <button class="btn btn-primary btn-sm" onclick="saveRichTask()">💾 Save to Board</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRichDraft()">🗑 Discard</button>
+            <span style="font-size:11px;color:var(--text3);margin-left:auto" id="richTaskStatus"></span>
+          </div>
+        </div>
+        <!-- RIGHT: structured fields -->
+        <div class="rich-editor-right">
+          <div class="rich-section-label">Priority & date</div>
+          <div class="rich-field form-row-2">
+            <select class="form-select" id="richPriority">
+              <option value="none">— none —</option>
+              <option value="high">🔴 High</option>
+              <option value="medium">🟡 Medium</option>
+              <option value="low">🟢 Low</option>
+            </select>
+            <input class="form-input" type="date" id="richDate" />
+          </div>
+          <div class="rich-section-label">Sites</div>
+          <div class="rich-field chip-grid" id="richSiteChips"></div>
+          <div class="rich-section-label">People</div>
+          <div class="rich-field chip-grid" id="richPersonChips"></div>
+          <div class="rich-section-label">Labels</div>
+          <div class="rich-field">
+            <div class="chip-grid" id="richProjectChips"></div>
+            <div class="tag-input-wrap" id="richProjectTagWrap" style="margin-top:5px;">
+              <input class="tag-inline-input" id="richProjectInput" placeholder="Type new and press Enter…" />
+            </div>
+          </div>
+          <div class="rich-section-label">Action items</div>
+          <div class="rich-field">
+            <div id="richActionsList"></div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <input class="form-input" id="richActionText" placeholder="Describe the action item…" style="width:100%;" />
+              <div style="display:flex;gap:6px;">
+                <select class="form-select" id="richActionAssignee" style="flex:1;"></select>
+                <button class="btn btn-orange btn-sm" onclick="addRichAction()" style="flex-shrink:0;">+ Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="rich-section-label">Links</div>
+          <div class="rich-field">
+            <div id="richLinksList"></div>
+            <div class="link-add-row">
+              <input class="form-input" id="richLinkName" placeholder="Link name (e.g. Power DK)" />
+              <div class="row2">
+                <input class="form-input" id="richLinkUrl" placeholder="https://…" style="flex:1;" />
+                <button class="btn btn-ghost btn-sm" onclick="addRichLink()" style="flex-shrink:0;">+ Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="rich-section-label">Attachments</div>
+          <div class="rich-field">
+            <div class="attach-preview" id="richAttachPreview"></div>
+            <div class="attach-zone" id="richAttachZone" onclick="document.getElementById('richFileInput').click()" ondragover="handleDragOver(event,'richAttachZone')" ondragleave="handleDragLeave('richAttachZone')" ondrop="handleDrop(event,'rich')">
+              📎 Click to upload or drag & drop
+            </div>
+            <input type="file" id="richFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(event,'rich')" />
+            <div class="paste-hint">💡 Ctrl+V to paste screenshot</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div id="page-settings" class="page-inner" style="display:none;">
+    <div class="tasks-header" style="margin-bottom:18px;"><div class="tasks-title">Settings</div></div>
+    <div class="settings-grid">
+      <div class="settings-card">
+        <div class="settings-card-title">Sites</div>
+        <div class="settings-card-sub">Sites you can tag on tasks</div>
+        <div class="settings-list" id="siteSettingsList"></div>
+        <div class="settings-add-row"><input id="newSiteInput" placeholder="New site (e.g. FI)" /><button class="btn btn-primary btn-sm" onclick="addSite()">+ Add</button></div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">People</div>
+        <div class="settings-card-sub">People you can assign to tasks</div>
+        <div class="settings-list" id="personSettingsList"></div>
+        <div class="settings-add-row"><input id="newPersonInput" placeholder="Full name" /><button class="btn btn-primary btn-sm" onclick="addPerson()">+ Add</button></div>
+      </div>
+      <div class="settings-card settings-card-full">
+        <div class="settings-card-title">Labels</div>
+        <div class="settings-card-sub">Saved labels. New labels typed in tasks appear here automatically.</div>
+        <div class="settings-list" id="projectSettingsList"></div>
+        <div class="settings-add-row"><input id="newProjectInput" placeholder="New label" /><button class="btn btn-primary btn-sm" onclick="addProjectTask()">+ Add</button></div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">Data export</div>
+        <div class="settings-card-sub">Download all tasks as JSON backup.</div>
+        <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export backup</button>
+      </div>
+      <div class="settings-card settings-card-full">
+        <div class="settings-card-title">🗑 Trash</div>
+        <div class="settings-card-sub">Recently deleted tasks. Restore or permanently delete.</div>
+        <div class="settings-list" id="trashList" style="max-height:240px;"></div>
+        <button class="btn btn-danger btn-sm" style="margin-top:8px;" onclick="emptyTrash()">Empty trash permanently</button>
       </div>
       <div class="settings-card">
         <div class="settings-card-title">Account</div>
@@ -1334,10 +2958,21 @@ function removeAction(i){fActions.splice(i,1);renderActionItems();}
 
 function openModal(){
   editingId=null;fSites=[];fPersons=[];fProjects=[];fActions=[];fLinks=[];modalAttachments=[];renderAttachPreview('modal');renderModalLinks();
-  document.getElementById('modalTitle').textContent='New task';
+  document.getElementById('modalTitle').textContent='+ Task';
   document.getElementById('fTitle').value='';document.getElementById('fNote').value='';
   document.getElementById('fPriority').value='none';document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
   renderModalChips();document.getElementById('taskOverlay').classList.remove('hidden');
+  // Restore draft if available
+  try{
+    const draft=JSON.parse(localStorage.getItem('wb_task_draft')||'null');
+    if(draft&&draft.savedAt&&Date.now()-draft.savedAt<86400000){
+      document.getElementById('fTitle').value=draft.title||'';
+      document.getElementById('fNote').value=draft.note||'';
+      document.getElementById('fPriority').value=draft.priority||'none';
+      document.getElementById('fDate').value=draft.date||'';
+      showToast('Draft restored ✓');
+    }
+  }catch(e){}
   setTimeout(()=>document.getElementById('fTitle').focus(),100);
 }
 function openEdit(id){
@@ -1348,7 +2983,23 @@ function openEdit(id){
   document.getElementById('fPriority').value=t.priority||'none';document.getElementById('fDate').value=t.date||'';
   renderModalChips();document.getElementById('taskOverlay').classList.remove('hidden');
 }
-function closeModal(){document.getElementById('taskOverlay').classList.add('hidden');editingId=null;}
+function closeModal(){
+  // Autosave draft to localStorage if there's a title
+  const title=document.getElementById('fTitle')?.value?.trim();
+  if(title&&!editingId){
+    try{
+      localStorage.setItem('wb_task_draft',JSON.stringify({
+        title,
+        note:document.getElementById('fNote')?.value||'',
+        priority:document.getElementById('fPriority')?.value||'none',
+        date:document.getElementById('fDate')?.value||'',
+        savedAt:Date.now()
+      }));
+    }catch(e){}
+  }
+  document.getElementById('taskOverlay').classList.add('hidden');
+  editingId=null;
+}
 async function saveTask(){
   const title=document.getElementById('fTitle').value.trim();if(!title){document.getElementById('fTitle').focus();return;}
   const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),links:JSON.parse(JSON.stringify(fLinks)),attachments:JSON.parse(JSON.stringify(modalAttachments)),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
@@ -1366,6 +3017,7 @@ async function saveTask(){
   data.history=[{type:'created',time:Date.now()}];
   await db.collection('tasks').add(data);showToast('Saved ✓');
 }
+  try{localStorage.removeItem('wb_task_draft');}catch(e){}
   closeModal();
 }
 
@@ -1486,6 +3138,57 @@ function deleteRichDraft(){
 }
 
 // ── SETTINGS ──
+// ── TRASH ──
+let trashItems = [];
+let unsubTrash;
+
+function startTrashListener(){
+  if(unsubTrash)return;
+  unsubTrash=db.collection('trash').orderBy('deletedAt','desc').onSnapshot(snap=>{
+    trashItems=snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderTrashList();
+  });
+}
+
+function renderTrashList(){
+  const el=document.getElementById('trashList');
+  if(!el)return;
+  if(!trashItems.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0;">Trash is empty.</div>';return;}
+  el.innerHTML=trashItems.map(t=>'<div class="settings-item">'
+    +'<span class="settings-item-name">'+escHtml(t.title||'(No title)')+'</span>'
+    +'<div style="display:flex;gap:6px;">'
+    +'<button class="btn btn-ghost btn-sm" onclick="restoreTask(''+t.id+'')">Restore</button>'
+    +'<button class="btn btn-danger btn-sm" onclick="permDelete(''+t.id+'')">Delete</button>'
+    +'</div></div>'
+  ).join('');
+}
+
+async function restoreTask(trashId){
+  const t=trashItems.find(x=>x.id===trashId);if(!t)return;
+  const restored={...t};
+  delete restored.id;delete restored.deletedAt;delete restored.originalId;
+  restored.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
+  if(!restored.createdAt)restored.createdAt=firebase.firestore.FieldValue.serverTimestamp();
+  await db.collection('tasks').add(restored);
+  await db.collection('trash').doc(trashId).delete();
+  showToast('Task restored ✓');
+}
+
+async function permDelete(trashId){
+  if(!confirm('Permanently delete? This cannot be undone.'))return;
+  await db.collection('trash').doc(trashId).delete();
+  showToast('Permanently deleted');
+}
+
+async function emptyTrash(){
+  if(!trashItems.length){showToast('Trash is already empty');return;}
+  if(!confirm('Permanently delete all '+trashItems.length+' items in trash?'))return;
+  const batch=db.batch();
+  trashItems.forEach(t=>batch.delete(db.collection('trash').doc(t.id)));
+  await batch.commit();
+  showToast('Trash emptied');
+}
+
 function renderSettingsLists(){
   document.getElementById('siteSettingsList').innerHTML=sites.map((s,i)=>'<div class="settings-item"><span class="settings-item-name">'+s+'</span><button class="btn btn-ghost btn-sm" onclick="removeSite('+i+')">Remove</button></div>').join('');
   document.getElementById('personSettingsList').innerHTML=persons.map((p,i)=>'<div class="settings-item"><span class="settings-item-name">'+p+'</span><button class="btn btn-ghost btn-sm" onclick="removePerson('+i+')">Remove</button></div>').join('');
@@ -1674,6 +3377,8 @@ async function toggleDetailAction(idx) {
 
 // ── ATTACHMENTS ──
 let modalAttachments = []; // {name, type, data (base64), size}
+let modalAutoSaveTimer = null;
+let modalDraftId = null;
 let richAttachments = [];
 
 const MAX_FILE_SIZE = 500 * 1024; // 500KB
@@ -1713,16 +3418,17 @@ function processFiles(files, target) {
 function renderAttachPreview(target) {
   const arr = target === 'modal' ? modalAttachments : richAttachments;
   const el = document.getElementById(target === 'modal' ? 'modalAttachPreview' : 'richAttachPreview');
-  el.innerHTML = arr.map((a, i) => {
-    if (a.type.startsWith('image/')) {
+  if (!el) return;
+  el.innerHTML = arr.map(function(a, i) {
+    if (a.type && a.type.startsWith('image/')) {
       return '<div class="attach-thumb">'
-        return '<div class="attach-thumb"><img src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="openLightbox(\"' + target + '\",' + i + ')" /><button class="attach-del" onclick="removeAttach(\"' + target + '\",' + i + ')">✕</button></div>';
-        return '<div class="attach-thumb is-file">📄 <span class="attach-name">' + escHtml(a.name) + '</span><button class="attach-del" onclick="removeAttach(\"' + target + '\",' + i + ')">✕</button></div>';
+        + '<img src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="openLightbox('' + target + '',' + i + ')" style="width:70px;height:52px;object-fit:cover;border-radius:5px;cursor:pointer;" />'
+        + '<button class="attach-del" onclick="removeAttach('' + target + '',' + i + ')">✕</button>'
         + '</div>';
     } else {
       return '<div class="attach-thumb is-file">'
         + '📄 <span class="attach-name">' + escHtml(a.name) + '</span>'
-        return '<div class="attach-thumb is-file">📄 <span class="attach-name">' + escHtml(a.name) + '</span><button class="attach-del" onclick="removeAttach(\"' + target + '\",' + i + ')">✕</button></div>';
+        + '<button class="attach-del" onclick="removeAttach('' + target + '',' + i + ')">✕</button>'
         + '</div>';
     }
   }).join('');
@@ -1768,6 +3474,25 @@ document.addEventListener('paste', (e) => {
 });
 
 // ── EVENT LISTENERS ──
+// Intercept browser back button
+window.addEventListener('popstate', function(e) {
+  if (!document.getElementById('detailOverlay').classList.contains('hidden')) {
+    closeDetail(); history.pushState(null,'',location.href); return;
+  }
+  if (!document.getElementById('taskOverlay').classList.contains('hidden')) {
+    closeModal(); history.pushState(null,'',location.href); return;
+  }
+  if (!document.getElementById('mobFilterOverlay').classList.contains('hidden')) {
+    closeMobileFilter(); history.pushState(null,'',location.href); return;
+  }
+  const richPage = document.getElementById('page-rich');
+  if (richPage && richPage.style.display !== 'none') {
+    closeRichEditor(); history.pushState(null,'',location.href); return;
+  }
+});
+// Push initial state
+history.pushState(null,'',location.href);
+
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();closeDetail();}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openModal();}
