@@ -838,6 +838,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 const firebaseConfig={apiKey:"AIzaSyCFcwXb_wqWVF5a6lNkX4R7DPxNmzuzQaA",authDomain:"workboard-b9078.firebaseapp.com",projectId:"workboard-b9078",storageBucket:"workboard-b9078.firebasestorage.app",messagingSenderId:"280887301765",appId:"1:280887301765:web:93011d76d466009e327bec"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore(),auth=firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 let tasks=[],sites=['DK','NO','SE','FI','NCS BO','PIAS'],persons=[],projectTasks=[];
 let defaultLabel='';
@@ -874,30 +875,24 @@ function handleUser(user){
 
 // Handle redirect result first, then listen for auth state
 auth.getRedirectResult().then(result=>{
-  console.log('Redirect result:', result);
   if(result&&result.user)handleUser(result.user);
-}).catch(err=>{
-  console.log('Redirect error:', err.code, err.message);
-  if(err&&err.code!=='auth/no-auth-event')showToast('Login failed: '+err.code);
-});
+}).catch(()=>{});
 
 auth.onAuthStateChanged(user=>{
-  console.log('Auth state changed:', user?user.email:'null');
   handleUser(user);
 });
 
-// Fallback: check if already logged in after short delay
-setTimeout(()=>{
-  const u=auth.currentUser;
-  if(u&&document.getElementById('appShell').style.display==='none'){
-    console.log('Fallback auth detected:', u.email);
-    handleUser(u);
-  }
-},1000);
-
 function signInGoogle(){
   const provider=new firebase.auth.GoogleAuthProvider();
-  auth.signInWithRedirect(provider);
+  provider.setCustomParameters({prompt:'select_account'});
+  auth.signInWithPopup(provider).then(result=>{
+    if(result.user)handleUser(result.user);
+  }).catch(err=>{
+    // COOP warnings are harmless — only show real errors
+    if(err.code&&err.code!=='auth/popup-closed-by-user'&&err.code!=='auth/cancelled-popup-request'){
+      showToast('Login failed: '+err.code);
+    }
+  });
 }
 
 function doSignOut(){if(confirm('Sign out of WorkBoard?'))auth.signOut();}
