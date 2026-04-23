@@ -512,6 +512,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .rich-tb-btn{background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text2);cursor:pointer;font-family:var(--mono);font-weight:600;transition:all .12s;}
 .rich-tb-btn:hover{background:var(--bg3);border-color:var(--border2);color:var(--text);}
 .rich-tb-sep{width:1px;background:var(--border2);margin:2px 4px;}
+.mention{color:var(--accent);font-weight:600;cursor:pointer;border-radius:3px;padding:0 2px;}
+.mention:hover{background:var(--accent-glow);text-decoration:underline;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
@@ -1274,7 +1276,9 @@ function kanbanCardHTML(t){
 
 function linkify(text){
   if(!text)return '';
-  return escHtml(text).replace(/(https?:\/\/[^\s<>"]+)/g,'<a href="$1" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;word-break:break-all;">$1</a>');
+  return escHtml(text)
+    .replace(/(https?:\/\/[^\s<>"]+)/g,'<a href="$1" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;word-break:break-all;">$1</a>')
+    .replace(/@([\w\u00C0-\u017E]+(?:\s[\w\u00C0-\u017E]+)?)/g,'<span class="mention" onclick="filterByMention(\'@$1\')">@$1</span>');
 }
 
 function taskCardHTML(t){
@@ -1362,6 +1366,14 @@ function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function formatDate(d){if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
 function isOverdue(d){if(!d)return false;return d<new Date().toISOString().slice(0,10);}
+function filterByMention(mention){
+  // Set search to @name and go to board
+  const searchEl=document.getElementById('searchInput');
+  if(searchEl){searchEl.value=mention;renderTasks();}
+  showPage('board');
+  showToast('Filtering by '+mention);
+}
+
 function toggleNote(el){el.classList.toggle("expanded");}
 async function toggleDone(id){
   const t=tasks.find(x=>x.id===id);if(!t)return;
