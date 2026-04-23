@@ -495,8 +495,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .today-item-actions{display:flex;gap:2px;flex-shrink:0;}
 .today-item-btn{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px;line-height:1;}
 .today-drag-handle{color:var(--text3);cursor:grab;font-size:12px;padding:0 4px 0 0;flex-shrink:0;user-select:none;}
-.today-item *{pointer-events:none;}
-.today-item .today-item-check,.today-item .today-item-btn,.today-item .today-drag-handle,.today-item .today-item-title{pointer-events:auto;}
 .today-drag-handle:active{cursor:grabbing;}
 .today-item.drag-over{border-color:var(--accent);background:var(--accent-glow);}
 .today-item-btn:hover{background:var(--bg3);color:var(--label);}
@@ -705,7 +703,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
           <span class="today-panel-count" id="todayFocusCount">0</span>
           <button class="today-item-btn" onclick="toggleTodayPanel()" title="Close">✕</button>
         </div>
-        <div class="today-panel-body" id="todayFocusList" ondragover="event.preventDefault()"></div>
+        <div class="today-panel-body" id="todayFocusList"></div>
         <div class="today-panel-footer">
           <button class="today-toggle-btn" onclick="resetTodayFocus()" style="flex:1;">🔄 Reset list</button>
         </div>
@@ -1744,7 +1742,7 @@ function renderTodayFocus(){
       +(t.persons||[]).map(function(p){return '<span class="itag itag-p">'+escHtml(p)+'</span>';}).join('')
       +(t.tags||[]).map(function(g){return '<span class="itag itag-t">'+escHtml(g)+'</span>';}).join('');
     return '<div class="today-item'+(item.done?' done-today':'')+'" draggable="true" data-idx="'+i+'" ondragstart="todayDragStart(event,'+i+')" ondragover="todayDragOver(event)" ondrop="todayDrop(event,'+i+')">'
-      +'<span class="today-drag-handle" title="Drag to reorder">☰</span>'
+      +'<span class="today-drag-handle" onmousedown="todayDragInit(event,'+i+')" ontouchstart="todayDragInit(event,'+i+')" title="Drag to reorder">☰</span>'
       +'<div class="today-item-check'+(item.done?' checked':'')+'" onclick="toggleTodayItemDone('+i+')"></div>'
       +'<div style="flex:1;min-width:0;">'
         +'<div class="today-item-title" onclick="todayItemClick(this)" data-tid="'+item.id+'" style="margin-bottom:'+(tags?'3px':'0')+';">'+escHtml(item.title)+'</div>'
