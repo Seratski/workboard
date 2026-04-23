@@ -514,6 +514,22 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .rich-tb-sep{width:1px;background:var(--border2);margin:2px 4px;}
 .mention{color:var(--accent);font-weight:600;cursor:pointer;border-radius:3px;padding:0 2px;}
 .mention:hover{background:var(--accent-glow);text-decoration:underline;}
+.rich-editor-ce{flex:1;outline:none;font-family:var(--font);font-size:14px;color:var(--text2);line-height:1.8;min-height:180px;padding:0;white-space:pre-wrap;word-wrap:break-word;}
+.rich-editor-ce:empty:before{content:attr(data-placeholder);color:var(--text3);pointer-events:none;}
+.rich-editor-ce b,.rich-editor-ce strong{color:var(--text);font-weight:700;}
+.rich-editor-ce i,.rich-editor-ce em{font-style:italic;color:var(--text);}
+.rich-editor-ce h1{font-size:18px;font-weight:700;color:var(--text);margin:8px 0 4px;}
+.rich-editor-ce h2{font-size:15px;font-weight:600;color:var(--text);margin:6px 0 3px;}
+.rich-editor-ce ul{margin:4px 0 4px 20px;}
+.rich-editor-ce ol{margin:4px 0 4px 20px;}
+.rich-editor-ce li{margin:2px 0;}
+.rich-editor-ce hr{border:none;border-top:1px solid var(--border2);margin:8px 0;}
+.rich-editor-ce .mention{color:var(--accent);font-weight:600;cursor:pointer;}
+.mention-dropdown{position:absolute;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:500;min-width:180px;overflow:hidden;display:none;}
+.mention-dropdown.visible{display:block;}
+.mention-option{padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;}
+.mention-option:hover,.mention-option.active{background:var(--accent-glow);color:var(--accent);}
+.mention-option-icon{font-size:11px;color:var(--text3);}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
@@ -634,6 +650,9 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     </div>
   </div>
 </div>
+
+<!-- MENTION DROPDOWN -->
+<div class="mention-dropdown" id="mentionDropdown"></div>
 
 <!-- APP -->
 <div id="appShell" style="display:none;flex-direction:column;height:100vh;height:100dvh;">
@@ -762,7 +781,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
             <button class="rich-tb-btn" onclick="richFormat('divider')" title="Divider">—</button>
           </div>
           <div class="rich-body">
-            <textarea class="rich-textarea" id="richBody" placeholder="Write freely…&#10;&#10;Use toolbar for formatting, or type markdown:&#10;**bold**, *italic*, # Heading, - bullet, 1. numbered" oninput="richAutoSave()"></textarea>
+            <div class="rich-editor-ce" id="richBody" contenteditable="true" data-placeholder="Write freely — context, background, decisions, meeting notes…" oninput="richAutoSave()"></div>
           </div>
           <div class="rich-footer">
             <button class="btn btn-primary btn-sm" onclick="saveRichTask()">💾 Save to Board</button>
@@ -1366,6 +1385,83 @@ function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function formatDate(d){if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
 function isOverdue(d){if(!d)return false;return d<new Date().toISOString().slice(0,10);}
+// ── MENTION AUTOCOMPLETE ──
+var mentionState={active:false,start:0,input:null};
+
+function initMentionInput(el){
+  if(!el)return;
+  el.addEventListener('input',function(e){handleMentionInput(el);});
+  el.addEventListener('keydown',function(e){handleMentionKey(e,el);});
+  el.addEventListener('blur',function(){setTimeout(function(){closeMentionDropdown();},200);});
+}
+
+function handleMentionInput(el){
+  var val=el.value, pos=el.selectionStart;
+  // Find @ before cursor
+  var before=val.substring(0,pos);
+  var atIdx=before.lastIndexOf('@');
+  if(atIdx===-1){closeMentionDropdown();return;}
+  var query=before.substring(atIdx+1);
+  // Allow up to 3 words in mention (for full names like "Lars Erik Viflat")
+  if(query.split(' ').length>4){closeMentionDropdown();return;}
+  // Build options from persons + sites + tags
+  var allOptions=[];
+  persons.forEach(function(p){allOptions.push({label:p,type:'person'});});
+  sites.forEach(function(s){allOptions.push({label:s,type:'site'});});
+  projectTasks.forEach(function(t){allOptions.push({label:t,type:'label'});});
+  var q=query.toLowerCase();
+  if(!q){closeMentionDropdown();return;}
+  var filtered=allOptions.filter(function(o){return o.label.toLowerCase().includes(q);}).slice(0,8);
+  if(!filtered.length){closeMentionDropdown();return;}
+  mentionState={active:true,start:atIdx,input:el};
+  renderMentionDropdown(filtered,el);
+}
+
+function renderMentionDropdown(options,el){
+  var dd=document.getElementById('mentionDropdown');
+  if(!dd)return;
+  var rect=el.getBoundingClientRect();
+  dd.style.left=rect.left+'px';
+  dd.style.top=(rect.bottom+4)+'px';
+  dd.style.width=rect.width+'px';
+  dd.innerHTML=options.map(function(o,i){
+    var icon=o.type==='person'?'👤':o.type==='site'?'◈':'🏷';
+    return '<div class="mention-option" data-label="'+o.label+'" onclick="selectMention(this)">'      +'<span class="mention-option-icon">'+icon+'</span>'+o.label+'</div>';
+  }).join('');
+  dd.classList.add('visible');
+}
+
+function selectMention(el){
+  var label=el.getAttribute('data-label');
+  var input=mentionState.input;
+  if(!input||!label)return;
+  var val=input.value;
+  var before=val.substring(0,mentionState.start);
+  var after=val.substring(input.selectionStart);
+  input.value=before+'@'+label+' '+after;
+  input.selectionStart=input.selectionEnd=before.length+label.length+2;
+  input.focus();
+  closeMentionDropdown();
+}
+
+function handleMentionKey(e,el){
+  var dd=document.getElementById('mentionDropdown');
+  if(!dd||!dd.classList.contains('visible'))return;
+  var opts=dd.querySelectorAll('.mention-option');
+  var active=dd.querySelector('.mention-option.active');
+  var idx=Array.from(opts).indexOf(active);
+  if(e.key==='ArrowDown'){e.preventDefault();var next=opts[idx+1]||opts[0];if(active)active.classList.remove('active');next.classList.add('active');}
+  else if(e.key==='ArrowUp'){e.preventDefault();var prev=opts[idx-1]||opts[opts.length-1];if(active)active.classList.remove('active');prev.classList.add('active');}
+  else if(e.key==='Enter'&&active){e.preventDefault();selectMention(active);}
+  else if(e.key==='Escape'){closeMentionDropdown();}
+}
+
+function closeMentionDropdown(){
+  var dd=document.getElementById('mentionDropdown');
+  if(dd)dd.classList.remove('visible');
+  mentionState.active=false;
+}
+
 function filterByMention(mention){
   // Set search to @name and go to board
   const searchEl=document.getElementById('searchInput');
@@ -1606,14 +1702,14 @@ function openRichEditor(id){
   if(id){
     const t=tasks.find(x=>x.id===id);if(!t)return;
     document.getElementById('richTitle').value=t.title||'';
-    document.getElementById('richBody').value=t.richBody||t.note||'';
+    document.getElementById('richBody').innerHTML=t.richBody||t.note||'';
     document.getElementById('richPriority').value=t.priority||'none';
     document.getElementById('richDate').value=t.date||'';
     rSites=[...(t.sites||[])];rPersons=[...(t.persons||[])];rProjects=[...(t.tags||[])];rActions=JSON.parse(JSON.stringify(t.actions||[]));rLinks=JSON.parse(JSON.stringify(t.links||[]));richAttachments=JSON.parse(JSON.stringify(t.attachments||[]));renderAttachPreview('rich');renderRichLinks();
     document.getElementById('richTaskStatus').textContent='Editing saved task';
   }else{
     document.getElementById('richTitle').value='';
-    document.getElementById('richBody').value='';
+    document.getElementById('richBody').innerHTML='';
     document.getElementById('richPriority').value='none';
     document.getElementById('richDate').value=new Date().toISOString().slice(0,10);
     rSites=[];rPersons=defaultPerson?[defaultPerson]:[];rProjects=defaultLabel?[defaultLabel]:[];rActions=[];rLinks=[];richAttachments=[];renderAttachPreview('rich');renderRichLinks();
@@ -1621,35 +1717,25 @@ function openRichEditor(id){
   }
   renderRichChips();
   showPage('rich');
-  setTimeout(()=>document.getElementById(id?'richTitle':'richBody').focus(),100);
+  setTimeout(()=>{var el=document.getElementById(id?'richTitle':'richBody');if(el){el.focus();if(!id){var range=document.createRange();var sel=window.getSelection();range.selectNodeContents(el);range.collapse(false);sel.removeAllRanges();sel.addRange(range);}}},100);
 }
 function closeRichEditor(){
   document.getElementById('appShell').classList.remove('rich-open');showPage('board');}
 
 function richFormat(type){
-  var ta=document.getElementById('richBody');
-  if(!ta)return;
-  var s=ta.selectionStart,e=ta.selectionEnd;
-  var v=ta.value,sel=v.substring(s,e);
-  var pre=v.substring(0,s),post=v.substring(e);
-  var nl=(pre===''||pre.endsWith('\n'))?'':'\n';
-  var ins='',cur=s;
-  if(type==='bold'){ins=sel?'**'+sel+'**':'**bold**';cur=s+(sel?ins.length:2);}
-  else if(type==='italic'){ins=sel?'*'+sel+'*':'*italic*';cur=s+(sel?ins.length:1);}
-  else if(type==='h1'){ins=nl+'# '+(sel||'Heading')+'\n';cur=s+nl.length+2+(sel?sel.length:7);}
-  else if(type==='h2'){ins=nl+'## '+(sel||'Subheading')+'\n';cur=s+nl.length+3+(sel?sel.length:10);}
-  else if(type==='bullet'){ins=nl+'- '+(sel||'Item')+'\n';cur=s+nl.length+2+(sel?sel.length:4);}
-  else if(type==='numbered'){ins=nl+'1. '+(sel||'Item')+'\n';cur=s+nl.length+3+(sel?sel.length:4);}
-  else if(type==='divider'){ins=nl+'---\n';cur=s+nl.length+4;}
-  ta.value=pre+ins+post;
-  ta.selectionStart=ta.selectionEnd=cur;
-  ta.focus();
+  document.getElementById('richBody').focus();
+  var cmds={bold:'bold',italic:'italic',h1:'formatBlock',h2:'formatBlock',bullet:'insertUnorderedList',numbered:'insertOrderedList',divider:'insertHorizontalRule'};
+  if(type==='h1')document.execCommand('formatBlock',false,'h1');
+  else if(type==='h2')document.execCommand('formatBlock',false,'h2');
+  else if(type==='divider')document.execCommand('insertHorizontalRule',false,null);
+  else document.execCommand(cmds[type],false,null);
   richAutoSave();
 }
 
 // Ctrl+B / Ctrl+I shortcuts
 document.addEventListener('keydown',function(e){
-  if(document.getElementById('richBody')===document.activeElement){
+  var rb=document.getElementById('richBody');
+  if(rb&&rb.contains(document.activeElement)||rb===document.activeElement){
     if(e.ctrlKey&&e.key==='b'){e.preventDefault();richFormat('bold');}
     if(e.ctrlKey&&e.key==='i'){e.preventDefault();richFormat('italic');}
   }
@@ -1672,8 +1758,8 @@ async function saveRichTask(){
   if(newPTs.length)await db.collection('meta').doc('projectTasks').set({list:[...projectTasks,...newPTs]});
   const data={
     title,
-    richBody:document.getElementById('richBody').value.trim(),
-    note:document.getElementById('richBody').value.trim().slice(0,200),
+    richBody:document.getElementById('richBody').innerHTML.trim(),
+    note:document.getElementById('richBody').innerHTML.substring(0,500),
     priority:document.getElementById('richPriority').value,
     date:document.getElementById('richDate').value,
     sites:[...rSites],persons:[...rPersons],tags:[...rProjects],
@@ -2027,11 +2113,14 @@ function openDetail(elOrId) {
     comments.forEach(function(c) {
       body += '<div class="comment-item">'
         +'<div class="comment-item-text">'+linkify(c.text)+'</div>'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">'
         +'<div class="comment-item-meta">'+formatDateFull(new Date(c.time))+'</div>'
+        +'<button onclick="deleteComment('+i+')" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:1px 4px;border-radius:3px;margin-left:auto;" title="Delete comment">✕</button>'
+        +'</div>'
         +'</div>';
     });
   }
-  body += '<textarea class="detail-comment-input" id="detailCommentInput" placeholder="Add a comment…"></textarea>';
+  body += '<textarea class="detail-comment-input" id="detailCommentInput" placeholder="Add a comment… (type @ to mention)"></textarea>';
   body += '<div class="detail-comment-add"><button class="btn btn-primary btn-sm" onclick="addComment()">+ Add comment</button></div>';
   body += '</div>';
 
@@ -2053,6 +2142,7 @@ function openDetail(elOrId) {
 
   if (!body) body = '<div style="color:var(--text3);font-size:13px;padding:8px 0">No additional details.</div>';
   document.getElementById('detailBody').innerHTML = body;
+  setTimeout(function(){initMentionInput(document.getElementById('detailCommentInput'));},50);
 
   // Footer
   const check = document.getElementById('detailCheck');
@@ -2061,6 +2151,16 @@ function openDetail(elOrId) {
   document.getElementById('detailRichBtn').style.display = t.richBody ? 'inline-flex' : 'none';
 
   document.getElementById('detailOverlay').classList.remove('hidden');
+}
+
+async function deleteComment(idx){
+  const t=tasks.find(x=>x.id===detailTaskId);
+  if(!t)return;
+  const comments=JSON.parse(JSON.stringify(t.comments||[]));
+  comments.splice(idx,1);
+  await db.collection('tasks').doc(detailTaskId).update({comments});
+  showToast('Comment deleted');
+  openDetail(detailTaskId);
 }
 
 async function addComment() {
