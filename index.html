@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>WorkBoard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-auth-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-firestore-compat.min.js"></script>
@@ -507,6 +508,10 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .pin-btn:hover{opacity:1;filter:grayscale(0);}
 .pin-btn.pinned{opacity:1;filter:grayscale(0);background:var(--accent-glow);border-radius:4px;}
 .task-row-wrap.is-pinned .task-stripe{box-shadow:inset 0 0 0 2px var(--accent);}
+.rich-toolbar{display:flex;gap:2px;padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;background:var(--bg2);}
+.rich-tb-btn{background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text2);cursor:pointer;font-family:var(--mono);font-weight:600;transition:all .12s;}
+.rich-tb-btn:hover{background:var(--bg3);border-color:var(--border2);color:var(--text);}
+.rich-tb-sep{width:1px;background:var(--border2);margin:2px 4px;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
@@ -742,8 +747,20 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       <div class="rich-editor-layout">
         <!-- LEFT: free text -->
         <div class="rich-editor-left">
+          <div class="rich-toolbar">
+            <button class="rich-tb-btn" onclick="richFormat('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button class="rich-tb-btn" onclick="richFormat('italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+            <div class="rich-tb-sep"></div>
+            <button class="rich-tb-btn" onclick="richFormat('h1')" title="Heading">H1</button>
+            <button class="rich-tb-btn" onclick="richFormat('h2')" title="Subheading">H2</button>
+            <div class="rich-tb-sep"></div>
+            <button class="rich-tb-btn" onclick="richFormat('bullet')" title="Bullet list">• List</button>
+            <button class="rich-tb-btn" onclick="richFormat('numbered')" title="Numbered list">1. List</button>
+            <div class="rich-tb-sep"></div>
+            <button class="rich-tb-btn" onclick="richFormat('divider')" title="Divider">—</button>
+          </div>
           <div class="rich-body">
-            <textarea class="rich-textarea" id="richBody" placeholder="Write freely — context, background, decisions, meeting notes…&#10;&#10;Use the panel on the right to add structure: priority, due date, sites, people, action items." oninput="richAutoSave()"></textarea>
+            <textarea class="rich-textarea" id="richBody" placeholder="Write freely…&#10;&#10;Use toolbar for formatting, or type markdown:&#10;**bold**, *italic*, # Heading, - bullet, 1. numbered" oninput="richAutoSave()"></textarea>
           </div>
           <div class="rich-footer">
             <button class="btn btn-primary btn-sm" onclick="saveRichTask()">💾 Save to Board</button>
@@ -1597,6 +1614,36 @@ function openRichEditor(id){
 function closeRichEditor(){
   document.getElementById('appShell').classList.remove('rich-open');showPage('board');}
 
+function richFormat(type){
+  var ta=document.getElementById('richBody');
+  if(!ta)return;
+  var s=ta.selectionStart,e=ta.selectionEnd;
+  var v=ta.value,sel=v.substring(s,e);
+  var pre=v.substring(0,s),post=v.substring(e);
+  var nl=(pre===''||pre.endsWith('\n'))?'':'\n';
+  var ins='',cur=s;
+  if(type==='bold'){ins=sel?'**'+sel+'**':'**bold**';cur=s+(sel?ins.length:2);}
+  else if(type==='italic'){ins=sel?'*'+sel+'*':'*italic*';cur=s+(sel?ins.length:1);}
+  else if(type==='h1'){ins=nl+'# '+(sel||'Heading')+'\n';cur=s+nl.length+2+(sel?sel.length:7);}
+  else if(type==='h2'){ins=nl+'## '+(sel||'Subheading')+'\n';cur=s+nl.length+3+(sel?sel.length:10);}
+  else if(type==='bullet'){ins=nl+'- '+(sel||'Item')+'\n';cur=s+nl.length+2+(sel?sel.length:4);}
+  else if(type==='numbered'){ins=nl+'1. '+(sel||'Item')+'\n';cur=s+nl.length+3+(sel?sel.length:4);}
+  else if(type==='divider'){ins=nl+'---\n';cur=s+nl.length+4;}
+  ta.value=pre+ins+post;
+  ta.selectionStart=ta.selectionEnd=cur;
+  ta.focus();
+  richAutoSave();
+}
+
+// Ctrl+B / Ctrl+I shortcuts
+document.addEventListener('keydown',function(e){
+  if(document.getElementById('richBody')===document.activeElement){
+    if(e.ctrlKey&&e.key==='b'){e.preventDefault();richFormat('bold');}
+    if(e.ctrlKey&&e.key==='i'){e.preventDefault();richFormat('italic');}
+  }
+});
+
+
 function richAutoSave(){
   document.getElementById('richSaveStatus').textContent='Saving…';
   clearTimeout(richAutoSaveTimer);
@@ -1692,6 +1739,7 @@ function addToTodayFocus(id){
 }
 
 async function saveTodayFocus(){
+  todaySortable=null;todaySortableMobile=null;
   await db.collection('meta').doc('todayFocus').set({items:todayFocus});
   renderTodayFocus();
   renderTasks(); // update pin state on board
@@ -1754,6 +1802,7 @@ function renderTodayFocus(){
 
   if(desktopEl)desktopEl.innerHTML = html;
   if(mobileEl)mobileEl.innerHTML = html;
+  setTimeout(initTodaySortable, 50);
 
   // Update today count on mobile tab
   const todayCount = document.getElementById('todayCount');
