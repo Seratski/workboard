@@ -72,7 +72,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
 /* BOARD */
 .board-shell{flex:1;overflow:hidden;display:flex;flex-direction:column;}
-.board-layout{flex:1;display:grid;grid-template-columns:220px 1fr;gap:16px;overflow:hidden;padding:20px 24px;}
+.board-layout{flex:1;display:grid;grid-template-columns:220px 1fr;gap:16px;overflow:hidden;padding:20px 24px;transition:grid-template-columns .2s ease;}
+.board-layout.today-open{grid-template-columns:220px 1fr 260px;}
 .board-left{overflow-y:auto;}
 .board-right{overflow-y:auto;}
 
@@ -322,7 +323,9 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
   .fab{display:none!important;}
 
   /* BOARD */
-  .board-layout{grid-template-columns:1fr;padding:12px 12px 12px;}
+  .board-layout{grid-template-columns:1fr!important;padding:12px 12px 12px;}
+  .today-panel{display:none!important;}
+  #todayPanelToggleBtn{display:none;}
   .board-left{display:none;}
   .tasks-header{flex-wrap:wrap;gap:6px;}
   .tasks-title{font-size:16px;}
@@ -474,6 +477,29 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .mob-fchip.label-on{background:rgba(41,201,176,0.12);border-color:#29c9b0;color:#30d0b8;}
 .mob-fchip.prio-on{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
 @media(min-width:701px){.mob-action-bar{display:none;}.bottom-nav{display:none;}}
+/* TODAY PANEL */
+.today-panel{display:flex;flex-direction:column;border-left:1px solid var(--border);overflow:hidden;}
+.today-panel-head{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.today-panel-title{font-size:12px;font-weight:700;color:var(--label);text-transform:uppercase;letter-spacing:0.8px;flex:1;}
+.today-panel-count{font-size:11px;font-family:var(--mono);color:var(--text3);background:var(--bg3);padding:1px 6px;border-radius:8px;}
+.today-panel-body{flex:1;overflow-y:auto;padding:10px 10px;}
+.today-item{display:flex;align-items:center;gap:6px;padding:8px 8px;border-radius:7px;border:1px solid var(--border);margin-bottom:5px;background:var(--bg2);transition:background .1s;}
+.today-item:hover{border-color:var(--border2);}
+.today-item.done-today{opacity:0.45;}
+.today-item-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.today-item-check:hover{border-color:var(--green);}
+.today-item-check.checked{background:var(--green);border-color:var(--green);}
+.today-item-check.checked::after{content:"✓";color:#03200e;font-size:8px;font-weight:700;}
+.today-item-title{flex:1;font-size:12px;color:var(--text);line-height:1.3;cursor:pointer;}
+.today-item.done-today .today-item-title{text-decoration:line-through;color:var(--text3);}
+.today-item-actions{display:flex;gap:2px;flex-shrink:0;}
+.today-item-btn{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px;line-height:1;}
+.today-item-btn:hover{background:var(--bg3);color:var(--label);}
+.today-panel-footer{padding:10px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0;}
+.today-toggle-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text2);cursor:pointer;font-family:var(--font);transition:all .12s;white-space:nowrap;}
+.today-toggle-btn:hover{border-color:var(--accent);color:var(--accent);}
+.today-toggle-btn.active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+.board-today-toggle{position:absolute;right:24px;top:0;background:var(--bg2);border:1px solid var(--border);border-bottom:none;border-radius:6px 6px 0 0;padding:4px 10px;font-size:11px;color:var(--text3);cursor:pointer;font-family:var(--font);}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
@@ -637,9 +663,10 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
           <div id="filterGroups"></div>
         </div>
       </div>
-      <div class="board-right">
+      <div class="board-right" style="position:relative;">
         <div class="tasks-header">
           <div class="tasks-title">All tasks</div>
+          <button class="today-toggle-btn" id="todayPanelToggleBtn" onclick="toggleTodayPanel()" title="Toggle Today focus panel">📌 Today <span id="todayPanelBadge"></span></button>
           <span class="tasks-count" id="tasksCount"></span>
           <select class="sort-select" id="sortSelect" onchange="renderTasks()">
             <option value="priority">↕ Priority</option>
@@ -662,13 +689,33 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
         </div>
         <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ Task" or "📝 Rich task" above.</p></div></div>
       </div>
+      <!-- TODAY FOCUS PANEL -->
+      <div class="today-panel" id="todayPanel" style="display:none;">
+        <div class="today-panel-head">
+          <span class="today-panel-title">📌 Today</span>
+          <span class="today-panel-count" id="todayFocusCount">0</span>
+          <button class="today-item-btn" onclick="toggleTodayPanel()" title="Close">✕</button>
+        </div>
+        <div class="today-panel-body" id="todayFocusList"></div>
+        <div class="today-panel-footer">
+          <button class="today-toggle-btn" onclick="resetTodayFocus()" style="flex:1;">🔄 Reset list</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- TODAY PAGE -->
   <div id="page-today" class="page-inner" style="display:none;">
-    <div class="tasks-header"><div class="tasks-title">Today</div><span class="tasks-count" id="todayCount"></span></div>
-    <div class="tasks" id="todayList"></div>
+    <div class="tasks-header">
+      <div class="tasks-title">📌 Today focus</div>
+      <span class="tasks-count" id="todayCount"></span>
+      <button class="today-toggle-btn" onclick="resetTodayFocus()" style="margin-left:auto;">🔄 Reset</button>
+    </div>
+    <div id="todayFocusListMobile"></div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+      <div class="tasks-header"><div class="tasks-title" style="font-size:13px;color:var(--text3);">Due today</div><span class="tasks-count" id="todayDueCount"></span></div>
+      <div class="tasks" id="todayList"></div>
+    </div>
   </div>
 
   <!-- DONE PAGE -->
@@ -907,6 +954,7 @@ function startListeners(){
   unsubSites=db.collection('meta').doc('sites').onSnapshot(doc=>{if(doc.exists&&doc.data().list)sites=doc.data().list;renderAll();});
   unsubPersons=db.collection('meta').doc('persons').onSnapshot(doc=>{if(doc.exists&&doc.data().list)persons=doc.data().list;renderAll();});
   unsubProjects=db.collection('meta').doc('projectTasks').onSnapshot(doc=>{if(doc.exists&&doc.data().list)projectTasks=doc.data().list;renderAll();});
+  startTodayFocusListener();
   db.collection('meta').doc('settings').onSnapshot(doc=>{
     if(doc.exists){defaultLabel=doc.data().defaultLabel||'';defaultPerson=doc.data().defaultPerson||'';}
     renderDefaultLabelSelect();
@@ -1254,6 +1302,7 @@ function taskHTML(t){
       +(t.note?'<div class="task-note-row" onclick="toggleNote(this)" title="Click to expand">'+escHtml(t.note)+'</div>':'')
       +actionBar
       +attachHTML(t)
+      +(t.done?'':'<button class="today-item-btn" data-tid="'+t.id+'" onclick="event.stopPropagation();pinTodayClick(this)" title="Add to Today" style="margin-top:3px;font-size:11px;color:var(--text3);">📌</button>')
     +'</div>'
     +'<div class="task-actions-col">'
       +(t.richBody?'<button class="ia" onclick="openRichEditor(\''+t.id+'\')">📝</button>':'')
@@ -1587,6 +1636,115 @@ function deleteRichDraft(){
 }
 
 // ── SETTINGS ──
+// ── TODAY FOCUS ──
+let todayFocus = []; // [{id, title, done}]
+let todayPanelOpen = false;
+let unsubTodayFocus;
+
+function startTodayFocusListener(){
+  if(unsubTodayFocus)return;
+  unsubTodayFocus = db.collection('meta').doc('todayFocus').onSnapshot(doc=>{
+    todayFocus = doc.exists ? (doc.data().items||[]) : [];
+    renderTodayFocus();
+  });
+}
+
+function toggleTodayPanel(){
+  todayPanelOpen = !todayPanelOpen;
+  const panel = document.getElementById('todayPanel');
+  const layout = document.querySelector('.board-layout');
+  const btn = document.getElementById('todayPanelToggleBtn');
+  if(todayPanelOpen){
+    panel.style.display = 'flex';
+    layout.classList.add('today-open');
+    if(btn)btn.classList.add('active');
+  } else {
+    panel.style.display = 'none';
+    layout.classList.remove('today-open');
+    if(btn)btn.classList.remove('active');
+  }
+}
+
+function todayItemClick(el){
+  var id=el.getAttribute('data-tid');
+  if(id)openDetail(id);
+}
+function pinTodayClick(el){
+  var id=el.getAttribute('data-tid');
+  addToTodayFocus(id);
+}
+function addToTodayFocus(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t)return;
+  if(todayFocus.find(x=>x.id===id)){showToast('Already in Today list');return;}
+  todayFocus.push({id, title:t.title||'(No title)', done:false});
+  saveTodayFocus();
+  showToast('Added to Today ✓');
+}
+
+async function saveTodayFocus(){
+  await db.collection('meta').doc('todayFocus').set({items:todayFocus});
+  renderTodayFocus();
+}
+
+async function resetTodayFocus(){
+  if(!confirm('Clear Today list?'))return;
+  todayFocus=[];
+  await db.collection('meta').doc('todayFocus').set({items:[]});
+  renderTodayFocus();
+  showToast('Today list reset ✓');
+}
+
+function moveTodayItem(i, dir){
+  const j = i + dir;
+  if(j<0||j>=todayFocus.length)return;
+  [todayFocus[i],todayFocus[j]]=[todayFocus[j],todayFocus[i]];
+  saveTodayFocus();
+}
+
+function toggleTodayItemDone(i){
+  todayFocus[i].done = !todayFocus[i].done;
+  saveTodayFocus();
+}
+
+function removeTodayItem(i){
+  todayFocus.splice(i,1);
+  saveTodayFocus();
+}
+
+function renderTodayFocus(){
+  // Update badge
+  const undone = todayFocus.filter(x=>!x.done).length;
+  const badge = document.getElementById('todayPanelBadge');
+  if(badge)badge.textContent = undone ? '('+undone+')' : '';
+  const countEl = document.getElementById('todayFocusCount');
+  if(countEl)countEl.textContent = todayFocus.length;
+
+  // Desktop panel
+  const desktopEl = document.getElementById('todayFocusList');
+  // Mobile today page
+  const mobileEl = document.getElementById('todayFocusListMobile');
+
+  const html = todayFocus.length ? todayFocus.map(function(item,i){
+    return '<div class="today-item'+(item.done?' done-today':'')+'">'
+      +'<div class="today-item-check'+(item.done?' checked':'')+'" onclick="toggleTodayItemDone('+i+')"></div>'
+      +'<span class="today-item-title" onclick="todayItemClick(this)" data-tid="'+item.id+'">'+escHtml(item.title)+'</span>'
+      +'<div class="today-item-actions">'
+      +(i>0?'<button class="today-item-btn" onclick="moveTodayItem('+i+',-1)" title="Move up">↑</button>':'')
+      +(i<todayFocus.length-1?'<button class="today-item-btn" onclick="moveTodayItem('+i+',1)" title="Move down">↓</button>':'')
+      +'<button class="today-item-btn" onclick="removeTodayItem('+i+')" title="Remove">✕</button>'
+      +'</div>'
+      +'</div>';
+  }).join('') : '<div style="color:var(--text3);font-size:12px;padding:12px 4px;">No tasks yet.<br>Click 📌 on any task to add it here.</div>';
+
+  if(desktopEl)desktopEl.innerHTML = html;
+  if(mobileEl)mobileEl.innerHTML = html;
+
+  // Update today count on mobile tab
+  const todayCount = document.getElementById('todayCount');
+  if(todayCount)todayCount.textContent = todayFocus.length?(todayFocus.length+' task'+(todayFocus.length!==1?'s':'')):'';
+}
+
 // ── TRASH ──
 let trashItems = [];
 let unsubTrash;
