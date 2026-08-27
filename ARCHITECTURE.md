@@ -286,10 +286,16 @@ Payloads live one per document in `attachments/{autoId}`:
 { name, type, size, data (base64 dataURL), createdAt }
 ```
 
-The task holds only `{id, name, type, size, thumb}`. `thumb` is a JPEG downscaled to 220 px
-on the long edge at quality 0.7 — a few KB — generated in-browser by `makeThumb()` on a
-canvas, with transparency flattened onto the card background rather than black. So the board
-renders thumbnails with no extra reads, and the full image costs exactly one read, on click.
+The task holds only `{id, name, type, size, thumb}`. `makeThumb()` downscales to 220 px on
+the long edge as JPEG at quality 0.82 — a few KB — on a canvas, with transparency flattened
+onto the card background rather than black. So the board renders thumbnails with no extra
+reads, and the full image costs exactly one read, on click.
+
+An image already within 220 px and under 40 KB is **not** re-encoded: `makeThumb` returns the
+original bytes. Re-encoding a 120 × 101 screenshot to JPEG only added artefacts to something
+that needed no downscaling at all. The cost is that such an image is stored twice, once as
+the task's `thumb` and once in its own document, which at those sizes is a few KB and buys a
+render with no fetch.
 
 This is what fixes the old defect. Each attachment now has the 1 MiB document budget to
 itself instead of sharing the task's with comments, history and action items, so several
@@ -318,6 +324,11 @@ than an `<a href>`.
 **The lightbox** has two modes, `fit` and `actual`, toggled by clicking the image or the
 button in its bar. `fit` scales in *both* directions — the old CSS was `max-width:90vw` with
 no `width`, so any screenshot smaller than the window opened at 1:1 and was unreadable.
+Enlargement is capped at `LIGHTBOX_MAX_UPSCALE`, 3×, applied as an inline `max-width` from
+the decoded `naturalWidth`: filling a 1360 px stage with a 120 px image is an 11×
+interpolation that recovers no detail and simply looks broken. The bar reports the real
+pixel dimensions, and the enlargement factor when there is one, so a soft image is explained
+rather than mysterious.
 Note that `fit` is sized in viewport units, not percentages: the stage is content-sized, so
 `width:100%` would resolve against the image's own intrinsic width and change nothing. The
 stage centres with auto margins rather than `justify-content`, so a zoomed image larger than

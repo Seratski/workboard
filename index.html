@@ -3487,6 +3487,11 @@ const attachCache = {};          // id -> full dataURL, so the lightbox fetches 
 // metadata takes a little, so ~700KB of file is the safe ceiling.
 const MAX_FILE_SIZE = 700 * 1024;
 const THUMB_MAX_PX = 220;
+const THUMB_QUALITY = 0.82;
+// An image already small enough needs no thumbnail at all: re-encoding it to JPEG would
+// add artefacts for nothing. Reuse the original, as long as it is small enough to sit in
+// the task document without bloating it.
+const THUMB_REUSE_MAX_BYTES = 40 * 1024;
 
 function readFileAsDataUrl(file){
   return new Promise(function(resolve,reject){
@@ -3505,7 +3510,10 @@ function makeThumb(dataUrl,type){
     var img=new Image();
     img.onload=function(){
       try{
-        var scale=Math.min(1,THUMB_MAX_PX/Math.max(img.width,img.height));
+        var longest=Math.max(img.width,img.height);
+        // No downscale needed: keep the original bytes rather than degrading them.
+        if(longest<=THUMB_MAX_PX&&dataUrl.length<=THUMB_REUSE_MAX_BYTES)return resolve(dataUrl);
+        var scale=Math.min(1,THUMB_MAX_PX/longest);
         var cw=Math.max(1,Math.round(img.width*scale));
         var ch=Math.max(1,Math.round(img.height*scale));
         var c=document.createElement('canvas');
@@ -3514,7 +3522,7 @@ function makeThumb(dataUrl,type){
         ctx.fillStyle='#252525';
         ctx.fillRect(0,0,cw,ch);
         ctx.drawImage(img,0,0,cw,ch);
-        resolve(c.toDataURL('image/jpeg',0.7));
+        resolve(c.toDataURL('image/jpeg',THUMB_QUALITY));
       }catch(e){resolve('');}
     };
     img.onerror=function(){resolve('');};
@@ -3677,6 +3685,30 @@ function removeAttach(target, i) {
 // the window is still readable. 'actual' shows it at 1:1 and lets the stage scroll, which
 // is what you want for small text in a large screenshot.
 let lightboxZoom='fit';
+// Scaling a 120x101 screenshot to fill a 1360px stage is an 11x enlargement: there is no
+// detail to recover and it just looks broken. Cap the enlargement and say so in the bar.
+const LIGHTBOX_MAX_UPSCALE=3;
+
+function sizeLightbox(){
+  var img=document.getElementById('lightboxImg');
+  var statusEl=document.getElementById('lightboxStatus');
+  if(!img)return;
+  if(lightboxZoom!=='fit'||!img.naturalWidth){
+    img.style.maxWidth='';img.style.maxHeight='';
+  }else{
+    img.style.maxWidth=(img.naturalWidth*LIGHTBOX_MAX_UPSCALE)+'px';
+    img.style.maxHeight=(img.naturalHeight*LIGHTBOX_MAX_UPSCALE)+'px';
+  }
+  if(statusEl&&img.naturalWidth&&!img.classList.contains('loading')){
+    var dims=img.naturalWidth+' \u00d7 '+img.naturalHeight;
+    var rect=img.getBoundingClientRect();
+    var factor=rect.width/img.naturalWidth;
+    statusEl.textContent = (lightboxZoom==='fit'&&factor>1.05)
+      ? dims+' \u00b7 enlarged '+(Math.round(factor*10)/10)+'\u00d7'
+      : dims;
+  }
+}
+
 function setLightboxZoom(mode){
   lightboxZoom=mode;
   var img=document.getElementById('lightboxImg');
@@ -3686,6 +3718,7 @@ function setLightboxZoom(mode){
     img.classList.toggle('actual',mode==='actual');
   }
   if(btn)btn.textContent=(mode==='fit')?'Actual size':'Fit to screen';
+  sizeLightbox();
 }
 function toggleLightboxZoom(){setLightboxZoom(lightboxZoom==='fit'?'actual':'fit');}
 
@@ -3709,11 +3742,14 @@ async function showLightboxFor(a){
   var full=await loadAttachmentFull(a);
   img.classList.remove('loading');
   if(full){
+    // Report the real dimensions once the browser has decoded the full image.
+    img.onload=function(){sizeLightbox();};
     img.src=full;
-    if(statusEl)statusEl.textContent='';
+    if(img.complete)sizeLightbox();
   }else{
     if(statusEl)statusEl.textContent=thumb?'Only the preview could be loaded':'';
     if(!thumb)showToast('That attachment could not be loaded');
+    sizeLightbox();
   }
 }
 function openLightbox(target, i) {
