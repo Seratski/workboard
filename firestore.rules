@@ -1,0 +1,49 @@
+// WorkBoard — Firestore security rules
+//
+// WorkBoard is a SINGLE-USER application. The client enforces nothing: it queries
+// db.collection('tasks') with no uid in any path and no where() clause, and Google
+// sign-in accepts any Google account. These rules are therefore the only thing
+// standing between this data and anyone who finds the app URL.
+//
+// SETUP: replace OWNER_UID below with the real UID, then paste the file into
+//   Firebase console → Firestore Database → Rules → Publish
+//
+// Find the UID under Firebase console → Authentication → Users (the "User UID"
+// column). Do not commit the real UID or the owner's email address to this
+// repository — it is public.
+//
+// Why UID and not email: request.auth.token.email also works and is easier to
+// read, but an email address can be reassigned, and the token claim is only
+// trustworthy when the provider has verified it. The UID is stable and
+// unambiguous. If you prefer email, use:
+//   request.auth.token.email_verified == true &&
+//   request.auth.token.email == 'owner@example.com'
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner() {
+      return request.auth != null
+          && request.auth.uid == 'OWNER_UID';
+    }
+
+    match /tasks/{taskId} {
+      allow read, write: if isOwner();
+    }
+
+    match /trash/{trashId} {
+      allow read, write: if isOwner();
+    }
+
+    // meta/sites, meta/persons, meta/projectTasks, meta/settings, meta/todayFocus
+    match /meta/{docId} {
+      allow read, write: if isOwner();
+    }
+
+    // Anything not matched above is denied by default. Firestore rules are
+    // additive — an explicit `allow ... : if false` catch-all would not revoke
+    // the grants above, so there is deliberately none here.
+  }
+}

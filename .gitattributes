@@ -1,0 +1,3 @@
+# Keep index.html LF so commits show real diffs, not whole-file rewrites.
+*.html text eol=lf
+*.md text eol=lf
