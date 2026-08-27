@@ -365,9 +365,28 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 /* MOBILE BOTTOM NAV */
 .bottom-nav{display:none;height:56px;background:var(--bg2);border-top:2px solid var(--accent);flex-shrink:0;}
 .bottom-nav-inner{display:flex;height:100%;}
-.bottom-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text3);font-size:10px;font-weight:500;border:none;background:transparent;font-family:var(--font);transition:color .12s;padding:0;}
+/* six items now, so a little tighter than the original five */
+.bottom-nav-item{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text3);font-size:9px;font-weight:500;border:none;background:transparent;font-family:var(--font);transition:color .12s;padding:0 1px;overflow:hidden;white-space:nowrap;}
 .bottom-nav-item.active{color:var(--accent);font-weight:600;}
-.bottom-nav-item .bni{font-size:18px;line-height:1;}
+.bottom-nav-item .bni{font-size:17px;line-height:1;}
+
+/* REPEAT */
+.repeat-grid{display:grid;grid-template-columns:78px 1fr;gap:8px;}
+.repeat-hint{font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;}
+.task-repeat-chip{font-size:10px;font-family:var(--mono);color:var(--purple);background:rgba(155,127,232,0.14);border:1px solid rgba(155,127,232,0.32);border-radius:5px;padding:1px 5px;}
+
+/* PAUSED */
+.paused-row{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);margin-bottom:5px;}
+.paused-stripe{width:3px;align-self:stretch;border-radius:3px;flex-shrink:0;}
+.paused-main{flex:1;min-width:0;}
+.paused-title{font-size:13px;color:var(--text);font-weight:500;cursor:pointer;}
+.paused-title:hover{color:var(--accent);}
+.paused-meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px;}
+.paused-until{font-size:11px;font-family:var(--mono);color:var(--teal);background:rgba(34,196,172,0.12);border:1px solid rgba(34,196,172,0.3);border-radius:6px;padding:2px 7px;}
+.pause-preset{display:flex;flex-wrap:wrap;gap:6px;}
+.pause-preset button{padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;transition:all .12s;}
+.pause-preset button:hover{border-color:var(--accent);color:var(--text);background:var(--bg4);}
+.task-paused-chip{font-size:10px;font-family:var(--mono);color:var(--teal);background:rgba(34,196,172,0.12);border:1px solid rgba(34,196,172,0.3);border-radius:5px;padding:1px 5px;}
 .fab{display:none;position:fixed;bottom:66px;right:16px;z-index:100;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(249,103,0,0.4);align-items:center;justify-content:center;}
 
 .toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:9px 15px;font-size:13px;color:var(--text);z-index:500;animation:slideUp .2s ease;display:none;max-width:calc(100vw - 40px);}
@@ -377,6 +396,10 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 /* RESPONSIVE */
 @media(max-width:700px){
   .logo-text{display:none;}
+  /* The base rule hides this, and a phone is the only place it belongs. Without this the
+     bottom nav was dead markup, and .nav-tabs is hidden at this width, so there was no
+     navigation at all on a phone. */
+  .bottom-nav{display:block;}
   /* MOBILE FILTER BAR */
   .mobile-filter-bar{display:flex;}
   /* TOPBAR */
@@ -665,6 +688,23 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       </div>
     </div>
     <div class="form-field">
+      <label class="form-label">Repeat</label>
+      <div class="repeat-grid">
+        <input class="form-input" type="number" id="fRepeatN" min="1" max="365" value="1" oninput="repeatHint('f')" />
+        <select class="form-select" id="fRepeatUnit" onchange="repeatHint('f')">
+          <option value="none">— does not repeat —</option>
+          <option value="day">days</option>
+          <option value="week">weeks</option>
+          <option value="month">months</option>
+        </select>
+      </div>
+      <select class="form-select" id="fRepeatFrom" style="margin-top:7px;" onchange="repeatHint('f')">
+        <option value="due">counting from the due date</option>
+        <option value="done">counting from when I tick it off</option>
+      </select>
+      <div class="repeat-hint" id="fRepeatHint"></div>
+    </div>
+    <div class="form-field">
       <label class="form-label">Sites <span class="form-hint">select multiple</span></label>
       <div class="chip-grid" id="siteChips"></div>
     </div>
@@ -727,11 +767,41 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     <div class="detail-footer">
       <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
       <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open note</button>
+      <button class="btn btn-ghost btn-sm" id="detailPauseBtn" onclick="openPause()">⏸️ Pause</button>
       <button class="btn btn-ghost btn-sm" id="detailMergeBtn" onclick="openMergePicker()">🔀 Merge</button>
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
       <div class="check-box" id="detailCheck" style="margin-left:auto;width:18px;height:18px;" onclick="toggleDoneFromDetail()"></div>
       <span style="font-size:12px;color:var(--text2)" id="detailDoneLabel">Mark done</span>
       <button class="btn btn-danger btn-sm" id="detailDeleteBtn" onclick="deleteFromDetail()" style="margin-left:12px;">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAUSE A TASK -->
+<div class="overlay hidden" id="pauseOverlay" onclick="if(event.target===this)closePause()">
+  <div class="merge-modal" style="max-width:440px;">
+    <div class="merge-head">
+      <div class="merge-head-title">⏸️ Pause task</div>
+      <div class="merge-head-sub" id="pauseSub"></div>
+    </div>
+    <div class="merge-body">
+      <div class="merge-field">
+        <div class="merge-field-label">Bring it back</div>
+        <div class="pause-preset" id="pausePresets"></div>
+      </div>
+      <div class="merge-field">
+        <div class="merge-field-label">Or pick a date</div>
+        <input class="form-input" type="date" id="pauseDate" />
+        <button class="btn btn-primary btn-sm" style="margin-top:9px;" onclick="applyPauseDate()">Pause until that date</button>
+      </div>
+      <div class="merge-note">
+        A paused task disappears from the board, from Today and from the overdue count, and
+        reappears by itself on the day you choose. It stays findable by search the whole time.
+      </div>
+    </div>
+    <div class="merge-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closePause()">Cancel</button>
+      <button class="btn btn-ghost btn-sm" id="pauseResumeBtn" onclick="resumeTask()" style="margin-left:auto;display:none;">▶ Resume now</button>
     </div>
   </div>
 </div>
@@ -796,6 +866,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     <div class="nav-tabs">
       <button class="nav-tab active" id="tab-board" onclick="showPage('board')">📋 Board</button>
       <button class="nav-tab" id="tab-today" onclick="showPage('today')">📅 Today</button>
+      <button class="nav-tab" id="tab-paused" onclick="showPage('paused')">⏸️ Paused</button>
       <button class="nav-tab" id="tab-done" onclick="showPage('done')">✅ Done</button>
       <button class="nav-tab" id="tab-settings" onclick="showPage('settings')">⚙️ Settings</button>
     </div>
@@ -886,6 +957,18 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     </div>
   </div>
 
+  <!-- PAUSED PAGE -->
+  <div id="page-paused" class="page-inner" style="display:none;">
+    <div class="tasks-header">
+      <div class="tasks-title">⏸️ Paused</div>
+      <span class="tasks-count" id="pausedCount"></span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.55;">
+      These are off the board until their date. They come back on their own — no action needed.
+    </div>
+    <div id="pausedList"></div>
+  </div>
+
   <!-- DONE PAGE -->
   <div id="page-done" class="page-inner" style="display:none;">
     <div class="tasks-header"><div class="tasks-title">Completed</div><span class="tasks-count" id="doneCount"></span></div>
@@ -935,6 +1018,23 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
               <option value="low">🟢 Low</option>
             </select>
             <input class="form-input" type="date" id="richDate" />
+          </div>
+          <div class="rich-section-label">Repeat</div>
+          <div class="rich-field">
+            <div class="repeat-grid">
+              <input class="form-input" type="number" id="rRepeatN" min="1" max="365" value="1" oninput="repeatHint('r');richAutoSave()" />
+              <select class="form-select" id="rRepeatUnit" onchange="repeatHint('r');richAutoSave()">
+                <option value="none">— does not repeat —</option>
+                <option value="day">days</option>
+                <option value="week">weeks</option>
+                <option value="month">months</option>
+              </select>
+            </div>
+            <select class="form-select" id="rRepeatFrom" style="margin-top:7px;" onchange="repeatHint('r');richAutoSave()">
+              <option value="due">counting from the due date</option>
+              <option value="done">counting from when I tick it off</option>
+            </select>
+            <div class="repeat-hint" id="rRepeatHint"></div>
           </div>
           <div class="rich-section-label">Sites</div>
           <div class="rich-field chip-grid" id="richSiteChips"></div>
@@ -1073,6 +1173,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       <button class="bottom-nav-item active" id="bnav-board" onclick="showPage('board')"><span class="bni">📋</span>Board</button>
       <button class="bottom-nav-item" id="bnav-today" onclick="showPage('today')"><span class="bni">📅</span>Today</button>
       <button class="bottom-nav-item" id="bnav-filter" onclick="openMobileFilter()"><span class="bni">⚡</span>Filter</button>
+      <button class="bottom-nav-item" id="bnav-paused" onclick="showPage('paused')"><span class="bni">⏸️</span>Paused</button>
       <button class="bottom-nav-item" id="bnav-done" onclick="showPage('done')"><span class="bni">✅</span>Done</button>
       <button class="bottom-nav-item" id="bnav-settings" onclick="showPage('settings')"><span class="bni">⚙️</span>Settings</button>
     </div>
@@ -1169,13 +1270,16 @@ function startListeners(){
   setTimeout(()=>document.getElementById('loadingScreen').classList.add('hidden'),5000);
 }
 
-function renderAll(){renderFilterPanel();renderTasks();renderTodayList();renderDoneList();renderSettingsLists();updateBadges();renderMobileFilterBar();const cnt=afS.length+afP.length+afT.length+afPr.length+(afOv?1:0);const btn=document.getElementById('bnav-filter');if(btn)btn.innerHTML='<span class="bni">⚡</span>'+(cnt?'Filter ('+cnt+')':'Filter');}
+function renderAll(){renderFilterPanel();renderTasks();renderTodayList();renderPausedList();renderDoneList();renderSettingsLists();updateBadges();renderMobileFilterBar();const cnt=afS.length+afP.length+afT.length+afPr.length+(afOv?1:0);const btn=document.getElementById('bnav-filter');if(btn)btn.innerHTML='<span class="bni">⚡</span>'+(cnt?'Filter ('+cnt+')':'Filter');}
 
 function updateBadges(){
   const today=todayStr();
-  const n=tasks.filter(t=>!t.done&&t.date===today).length;
+  const n=tasks.filter(t=>!t.done&&!isPaused(t)&&t.date===today).length;
   const badge=n?' <span class="nav-badge">'+n+'</span>':'';
   document.getElementById('tab-today').innerHTML='📅 Today'+badge;
+  const p=tasks.filter(t=>!t.done&&isPaused(t)).length;
+  const pt=document.getElementById('tab-paused');
+  if(pt)pt.innerHTML='⏸️ Paused'+(p?' <span class="nav-badge">'+p+'</span>':'');
 }
 
 // -- PAGE SWITCHING --
@@ -1280,7 +1384,7 @@ function showPage(p){
   const bar = document.getElementById('mobileFilterBar');
   if (bar) bar.style.display = p === 'board' ? '' : 'none';
 
-  ['board','today','done','rich','settings'].forEach(x=>{
+  ['board','today','paused','done','rich','settings'].forEach(x=>{
     const el=document.getElementById('page-'+x);
     const isActive=x===p;
     if(x==='board')el.style.display=isActive?'flex':'none';
@@ -1368,11 +1472,15 @@ function getFiltered(mode){
   const today=todayStr();
   return tasks.filter(t=>{
     if(mode==='done')return t.done;
-    if(mode==='today')return !t.done&&t.date===today;
+    if(mode==='paused')return !t.done&&isPaused(t);
+    if(mode==='today')return !t.done&&!isPaused(t)&&t.date===today;
     if(t.done&&mode!=='search')return false;
-    if(afS.length&&!afS.every(s=>(t.sites||[]).includes(s)))return false;
-    if(afP.length&&!afP.every(p=>(t.persons||[]).includes(p)))return false;
-    if(afT.length&&!afT.every(p=>(t.tags||[]).includes(p)))return false;
+    // Paused tasks stay off the board and out of the counts, but search still finds them.
+    if(isPaused(t)&&mode!=='search')return false;
+    // OR within a group, AND across groups: "DK or NO" and "assigned to Martin".
+    if(afS.length&&!afS.some(s=>(t.sites||[]).includes(s)))return false;
+    if(afP.length&&!afP.some(p=>(t.persons||[]).includes(p)))return false;
+    if(afT.length&&!afT.some(p=>(t.tags||[]).includes(p)))return false;
     if(afPr.length&&!afPr.includes(t.priority||'none'))return false;
     if(afOv&&!isOverdue(t.date))return false;
     if(q){const comments=(t.comments||[]).map(function(c){return c.text||'';});const hay=[t.title||'',t.note||'',taskBodyText(t),...(t.sites||[]),...(t.persons||[]),...(t.tags||[]),...comments].join(' ').toLowerCase();if(!hay.includes(q))return false;}
@@ -1429,6 +1537,38 @@ function renderTodayList(){
   document.getElementById('todayCount').textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
   document.getElementById('todayList').innerHTML=f.length?f.map(taskHTML).join(''):'<div class="empty"><div class="empty-icon">☀️</div><p>Nothing due today.</p></div>';
 }
+function renderPausedList(){
+  const f=getFiltered('paused').slice().sort(function(a,b){
+    return (a.snoozedUntil||'').localeCompare(b.snoozedUntil||'');
+  });
+  const cnt=document.getElementById('pausedCount');
+  if(cnt)cnt.textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
+  const el=document.getElementById('pausedList');
+  if(!el)return;
+  if(!f.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">⏸️</div><p>Nothing paused.<br>'
+      +'Open a task and choose Pause to put it aside until a date.</p></div>';
+    return;
+  }
+  const sc={high:'stripe-high',medium:'stripe-medium',low:'stripe-low',none:'stripe-none'};
+  el.innerHTML=f.map(function(t){
+    var tags=(t.sites||[]).map(function(x){return '<span class="itag itag-s">'+escHtml(x)+'</span>';}).join('')
+      +(t.persons||[]).map(function(x){return '<span class="itag itag-p">'+escHtml(x)+'</span>';}).join('')
+      +(t.tags||[]).map(function(x){return '<span class="itag itag-t">'+escHtml(x)+'</span>';}).join('');
+    var days=Math.round((dateFromStr(t.snoozedUntil)-dateFromStr(todayStr()))/86400000);
+    var when=formatDate(t.snoozedUntil)+(days===1?' \u00b7 tomorrow':' \u00b7 in '+days+' days');
+    return '<div class="paused-row" id="tc-'+t.id+'">'
+      +'<div class="paused-stripe '+sc[t.priority||'none']+'"></div>'
+      +'<div class="paused-main">'
+        +'<div class="paused-title" onclick="openDetail(\''+t.id+'\')">'+escHtml(t.title||'(No title)')+'</div>'
+        +'<div class="paused-meta"><span class="paused-until">\u23f8\ufe0f '+when+'</span>'+tags
+        +(t.date?'<span class="task-date-inline">due '+formatDate(t.date)+'</span>':'')+'</div>'
+      +'</div>'
+      +'<button class="btn btn-ghost btn-sm" onclick="resumeTaskById(\''+t.id+'\')">\u25b6\ufe0f Resume</button>'
+      +'</div>';
+  }).join('');
+}
+
 function renderDoneList(){
   const f=getFiltered('done');
   document.getElementById('doneCount').textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
@@ -1541,6 +1681,8 @@ function taskHTML(t){
   const actionBar=actions.length
     ?'<div class="action-progress"><div class="action-progress-bar"><div class="action-progress-fill" style="width:'+pct+'%"></div></div><span class="action-progress-text">'+doneA+'/'+actions.length+' done</span></div>':'';
   const richIcon=t.richBody?'<span style="font-size:10px;color:var(--text3);margin-left:2px">📝</span>':'';
+  const pausedChip=isPaused(t)?'<span class="task-paused-chip">\u23f8\ufe0f '+formatDate(t.snoozedUntil)+'</span>':'';
+  const repeatChip=(t.repeat&&t.repeat.unit&&t.repeat.unit!=='none')?'<span class="task-repeat-chip">\uD83D\uDD01 '+escHtml(repeatText(t.repeat))+'</span>':'';
   var isPinned=todayFocus.some(function(x){return x.id===t.id;});
   return '<div class="task-row-wrap '+(t.done?'done':'')+' '+(isPinned?'is-pinned':'')+' " id="tc-'+t.id+'" onclick="openDetail(this)" style="cursor:pointer">'
     +'<div class="task-stripe '+sc+'"></div>'
@@ -1550,8 +1692,8 @@ function taskHTML(t){
         +'<span class="task-title">'+escHtml(t.title||'(No title)')+richIcon+'</span>'
         +(t.done?'':'<button class="pin-btn'+(isPinned?' pinned':'')+'" data-tid="'+t.id+'" onclick="event.stopPropagation();pinTodayClick(this)" title="'+(isPinned?'In Today list':'Add to Today')+'">📌</button>')
       +'</div>'
-      +(tags||t.date||(t.links&&t.links.length)||(t.comments&&t.comments.length)?'<div class="task-tags-row">'+tags
-      +((t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'')+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'" >'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+(t.links&&t.links.length?t.links.map(function(l){return '<a class="task-link-chip" href="'+escHtml(l.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 '+escHtml(l.name)+'</a>';}).join(''):'')+'</div>':'')
+      +(tags||t.date||pausedChip||repeatChip||(t.links&&t.links.length)||(t.comments&&t.comments.length)?'<div class="task-tags-row">'+tags
+      +pausedChip+repeatChip+((t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'')+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'" >'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+(t.links&&t.links.length?t.links.map(function(l){return '<a class="task-link-chip" href="'+escHtml(l.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 '+escHtml(l.name)+'</a>';}).join(''):'')+'</div>':'')
       +(t.note?'<div class="task-note-row" onclick="toggleNote(this)" title="Click to expand">'+escHtml(t.note)+'</div>':'')
       +actionBar
       +attachHTML(t)
@@ -1607,6 +1749,26 @@ function todayStr(d){
   return x.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day;
 }
 function isOverdue(d){if(!d)return false;return d<todayStr();}
+
+// Calendar arithmetic on YYYY-MM-DD keys. Midday avoids every DST edge case, and month
+// addition clamps rather than overflowing: 31 Jan + 1 month is 28/29 Feb, not 3 March.
+function dateFromStr(str){return new Date((str||todayStr())+'T12:00:00');}
+function addDays(d,n){var x=new Date(d.getTime());x.setDate(x.getDate()+n);return x;}
+function addMonths(d,n){
+  var day=d.getDate();
+  var x=new Date(d.getTime());
+  x.setDate(1);
+  x.setMonth(x.getMonth()+n);
+  var lastOfMonth=new Date(x.getFullYear(),x.getMonth()+1,0).getDate();
+  x.setDate(Math.min(day,lastOfMonth));
+  return x;
+}
+function addDaysStr(n,from){return todayStr(addDays(dateFromStr(from),n));}
+function addMonthsStr(n,from){return todayStr(addMonths(dateFromStr(from),n));}
+
+// Paused means "has a wake date still in the future". A date in the past simply means the
+// task has already come back, so nothing needs clearing when the day arrives.
+function isPaused(t){return !!(t&&t.snoozedUntil&&t.snoozedUntil>todayStr());}
 // -- MENTION AUTOCOMPLETE --
 var mentionState={active:false,start:0,input:null};
 
@@ -1725,9 +1887,11 @@ function hideTaskTooltip(){
 function toggleNote(el){el.classList.toggle("expanded");}
 async function toggleDone(id){
   const t=tasks.find(x=>x.id===id);if(!t)return;
+  const wasDone=!!t.done;
   const hist=JSON.parse(JSON.stringify(t.history||[]));
-  hist.push({type:t.done?'reopened':'completed',time:Date.now()});
-  await db.collection('tasks').doc(id).update({done:!t.done,history:hist});
+  hist.push({type:wasDone?'reopened':'completed',time:Date.now()});
+  await db.collection('tasks').doc(id).update({done:!wasDone,history:hist});
+  if(!wasDone)await spawnRepeat(t);
 }
 async function deleteTask(id){
   const t=tasks.find(x=>x.id===id);if(!t)return;
@@ -1837,6 +2001,7 @@ function openModal(){
   document.getElementById('modalTitle').textContent='+ Task';
   document.getElementById('fTitle').value='';document.getElementById('fNote').value='';
   document.getElementById('fPriority').value='none';document.getElementById('fDate').value=todayStr();
+  writeRepeat('f',null);
   renderModalChips();document.getElementById('taskOverlay').classList.remove('hidden');
   // Restore draft if available
   try{
@@ -1857,6 +2022,7 @@ function openEdit(id){
   document.getElementById('modalTitle').textContent='Edit task';
   document.getElementById('fTitle').value=t.title||'';document.getElementById('fNote').value=t.note||'';
   document.getElementById('fPriority').value=t.priority||'none';document.getElementById('fDate').value=t.date||'';
+  writeRepeat('f',t.repeat||null);
   renderModalChips();document.getElementById('taskOverlay').classList.remove('hidden');
 }
 function closeModal(){
@@ -1886,7 +2052,7 @@ function closeModal(){
 async function saveTask(){
   const title=document.getElementById('fTitle').value.trim();if(!title){document.getElementById('fTitle').focus();return;}
   await persistAttachments(modalAttachments);
-  const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),links:JSON.parse(JSON.stringify(fLinks)),attachments:attachForTask(modalAttachments),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),links:JSON.parse(JSON.stringify(fLinks)),attachments:attachForTask(modalAttachments),repeat:readRepeat('f'),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
   const newPTs=fProjects.filter(p=>!projectTasks.includes(p));
   if(newPTs.length)await db.collection('meta').doc('projectTasks').set({list:[...projectTasks,...newPTs]});
   if(editingId){
@@ -1961,6 +2127,7 @@ function openRichEditor(id){
     else document.getElementById('richBody').innerText=t.richBody||t.note||'';
     document.getElementById('richPriority').value=t.priority||'none';
     document.getElementById('richDate').value=t.date||'';
+    writeRepeat('r',t.repeat||null);
     rSites=[...(t.sites||[])];rPersons=[...(t.persons||[])];rProjects=[...(t.tags||[])];rActions=JSON.parse(JSON.stringify(t.actions||[]));rLinks=JSON.parse(JSON.stringify(t.links||[]));richAttachments=JSON.parse(JSON.stringify(t.attachments||[]));renderAttachPreview('rich');renderRichLinks();
     document.getElementById('richTaskStatus').textContent='Editing saved task';
   }else{
@@ -1968,6 +2135,7 @@ function openRichEditor(id){
     document.getElementById('richBody').innerText='';
     document.getElementById('richPriority').value='none';
     document.getElementById('richDate').value=todayStr();
+    writeRepeat('r',null);
     rSites=[];rPersons=defaultPerson?[defaultPerson]:[];rProjects=defaultLabel?[defaultLabel]:[];rActions=[];rLinks=[];richAttachments=[];renderAttachPreview('rich');renderRichLinks();
     document.getElementById('richTaskStatus').textContent='Draft \u2014 not saved yet';
     try{
@@ -2094,6 +2262,7 @@ async function richFlush(){
       priority:snap.priority,date:snap.date,
       sites:snap.sites,persons:snap.persons,tags:snap.tags,
       actions:snap.actions,links:snap.links,attachments:attachForTask(snap.attachments),
+      repeat:readRepeat('r'),
       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
     };
     // Never blank an existing title just because the field is empty mid-retype.
@@ -2146,6 +2315,7 @@ async function saveRichTask(){
     actions:JSON.parse(JSON.stringify(rActions)),
     links:JSON.parse(JSON.stringify(rLinks)),
     attachments:attachForTask(richAttachments),
+    repeat:readRepeat('r'),
     done:false,
     updatedAt:firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -2301,7 +2471,9 @@ async function toggleTodayItemDone(i){
   todayFocus[i].done = newDone;
   // Also mark the actual task as done on Board
   if(newDone){
+    var full=tasks.find(function(x){return x.id===item.id;});
     await db.collection('tasks').doc(item.id).update({done:true});
+    if(full&&!full.done)await spawnRepeat(full);
     // Remove from today list after short delay so user sees the checkmark
     setTimeout(function(){
       todayFocus.splice(i,1);
@@ -2563,6 +2735,179 @@ async function addPerson(){const v=document.getElementById('newPersonInput').val
 async function removePerson(i){persons.splice(i,1);await db.collection('meta').doc('persons').set({list:persons});renderSettingsLists();renderFilterPanel();}
 async function addProjectTask(){const v=document.getElementById('newProjectInput').value.trim();if(!v||projectTasks.includes(v))return;projectTasks.push(v);document.getElementById('newProjectInput').value='';await db.collection('meta').doc('projectTasks').set({list:projectTasks});renderSettingsLists();}
 async function removeProjectTask(i){projectTasks.splice(i,1);await db.collection('meta').doc('projectTasks').set({list:projectTasks});renderSettingsLists();renderFilterPanel();}
+
+// -- REPEAT --
+// { n, unit: 'day'|'week'|'month', from: 'due'|'done' } on the task, or absent.
+function readRepeat(prefix){
+  var unit=(document.getElementById(prefix+'RepeatUnit')||{}).value||'none';
+  if(unit==='none')return null;
+  var n=parseInt((document.getElementById(prefix+'RepeatN')||{}).value,10);
+  n=Math.max(1,Math.min(365,isNaN(n)?1:n));
+  var from=(document.getElementById(prefix+'RepeatFrom')||{}).value||'due';
+  return {n:n,unit:unit,from:(from==='done'?'done':'due')};
+}
+function writeRepeat(prefix,r){
+  var u=document.getElementById(prefix+'RepeatUnit');
+  var n=document.getElementById(prefix+'RepeatN');
+  var f=document.getElementById(prefix+'RepeatFrom');
+  if(u)u.value=(r&&r.unit)?r.unit:'none';
+  if(n)n.value=(r&&r.n)?r.n:1;
+  if(f)f.value=(r&&r.from==='done')?'done':'due';
+  repeatHint(prefix);
+}
+function repeatText(r){
+  if(!r||!r.unit||r.unit==='none')return '';
+  var unit=r.unit+(r.n===1?'':'s');
+  return 'every '+(r.n===1?'':r.n+' ')+unit;
+}
+function repeatHint(prefix){
+  var el=document.getElementById(prefix+'RepeatHint');
+  if(!el)return;
+  var r=readRepeat(prefix);
+  var rowShown=(r!==null);
+  var f=document.getElementById(prefix+'RepeatFrom');
+  var n=document.getElementById(prefix+'RepeatN');
+  if(f)f.style.display=rowShown?'':'none';
+  if(n)n.disabled=!rowShown;
+  if(!r){el.textContent='';return;}
+  el.textContent='Ticking this off creates the next one '+repeatText(r)+', '
+    +(r.from==='due'?'counted from its due date.':'counted from the day you finish it.');
+}
+
+// The next occurrence. Counting from the due date and finishing very late would otherwise
+// produce a date that is already overdue, so keep stepping until it lands in the future.
+function nextRepeatDate(t){
+  var r=t&&t.repeat;
+  if(!r||!r.unit||r.unit==='none')return '';
+  var n=Math.max(1,Math.min(365,parseInt(r.n,10)||1));
+  var fromDue=(r.from==='due')&&!!t.date;
+  var d=dateFromStr(fromDue?t.date:todayStr());
+  var step=function(x){
+    if(r.unit==='day')return addDays(x,n);
+    if(r.unit==='week')return addDays(x,7*n);
+    return addMonths(x,n);
+  };
+  d=step(d);
+  if(fromDue){
+    var guard=0;
+    while(todayStr(d)<=todayStr()&&guard<600){d=step(d);guard++;}
+  }
+  return todayStr(d);
+}
+
+async function spawnRepeat(t){
+  if(!t||!t.repeat||!t.repeat.unit||t.repeat.unit==='none')return null;
+  var next=nextRepeatDate(t);
+  if(!next)return null;
+  var data={
+    title:t.title||'',
+    note:t.note||'',
+    priority:t.priority||'none',
+    date:next,
+    sites:(t.sites||[]).slice(),
+    persons:(t.persons||[]).slice(),
+    tags:(t.tags||[]).slice(),
+    links:JSON.parse(JSON.stringify(t.links||[])),
+    // Action items are the recipe, not the record, so they come along unticked.
+    actions:(t.actions||[]).map(function(a){return {text:a.text||'',assignee:a.assignee||'',done:false};}),
+    // Attachments deliberately do NOT come along. The payload documents are shared by
+    // reference, so permanently deleting one occurrence would take the other's images too.
+    attachments:[],
+    comments:[],
+    repeat:JSON.parse(JSON.stringify(t.repeat)),
+    snoozedUntil:'',
+    done:false,
+    history:[{type:'repeated',time:Date.now()}],
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if(t.richBody){data.richBody=t.richBody;if(t.richHtml)data.richHtml=true;}
+  try{
+    var ref=await db.collection('tasks').add(data);
+    showToast('Next one due '+formatDate(next)+' \u2713');
+    return ref.id;
+  }catch(e){
+    showToast('Could not schedule the next one: '+(e.code||e.message||'error'));
+    return null;
+  }
+}
+
+// -- PAUSE --
+let pauseTaskId=null;
+
+function openPause(id){
+  var t=tasks.find(function(x){return x.id===(id||detailTaskId);});
+  if(!t){showToast('Task not found');return;}
+  pauseTaskId=t.id;
+  document.getElementById('pauseSub').innerHTML=escHtml(t.title||'(No title)')
+    +(isPaused(t)?'<br><span style="color:var(--teal)">Currently paused until '+formatDate(t.snoozedUntil)+'</span>':'');
+  var presets=[
+    ['Tomorrow',addDaysStr(1)],
+    ['In 3 days',addDaysStr(3)],
+    ['Next week',addDaysStr(7)],
+    ['In 2 weeks',addDaysStr(14)],
+    ['Next month',addMonthsStr(1)]
+  ];
+  document.getElementById('pausePresets').innerHTML=presets.map(function(p){
+    return '<button onclick="pauseUntil(\''+p[1]+'\')">'+p[0]
+      +'<span style="display:block;font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:2px;">'
+      +formatDate(p[1])+'</span></button>';
+  }).join('');
+  document.getElementById('pauseDate').value=t.snoozedUntil||addDaysStr(7);
+  document.getElementById('pauseResumeBtn').style.display=isPaused(t)?'inline-flex':'none';
+  document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+function closePause(){
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  pauseTaskId=null;
+}
+
+async function pauseUntil(dateStr){
+  var id=pauseTaskId;
+  if(!id||!dateStr)return;
+  if(dateStr<=todayStr()){showToast('Pick a date in the future');return;}
+  try{
+    await db.collection('tasks').doc(id).update({
+      snoozedUntil:dateStr,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // A paused task should not sit in the Today list: the point of pausing is "not now".
+    if(todayFocus.some(function(x){return x.id===id;})){
+      todayFocus=todayFocus.filter(function(x){return x.id!==id;});
+      await saveTodayFocus();
+    }
+    closePause();
+    closeDetail();
+    showToast('Paused until '+formatDate(dateStr)+' \u2713');
+  }catch(e){
+    showToast('Could not pause: '+(e.code||e.message||'error'));
+  }
+}
+
+function applyPauseDate(){
+  var v=document.getElementById('pauseDate').value;
+  if(!v){showToast('Pick a date first');return;}
+  pauseUntil(v);
+}
+
+async function resumeTaskById(id){
+  if(!id)return;
+  try{
+    await db.collection('tasks').doc(id).update({
+      snoozedUntil:'',
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Back on the board \u2713');
+  }catch(e){
+    showToast('Could not resume: '+(e.code||e.message||'error'));
+  }
+}
+async function resumeTask(){
+  var id=pauseTaskId;
+  closePause();
+  closeDetail();
+  await resumeTaskById(id);
+}
 
 // -- BACKUP: EXPORT / IMPORT --
 // v1 envelope. The pre-v1 export was a flat {tasks,sites,persons,projectTasks} object with
@@ -2983,6 +3328,26 @@ function openDetail(elOrId) {
   // Body
   let body = '';
 
+  if (t.repeat && t.repeat.unit && t.repeat.unit!=='none') {
+    body += '<div class="detail-section">'
+      + '<div class="detail-section-label">Repeats</div>'
+      + '<div style="font-size:13px;color:var(--text2);line-height:1.6;">'
+        + '\uD83D\uDD01 ' + escHtml(repeatText(t.repeat))
+        + ', counted from ' + (t.repeat.from==='done'?'the day you finish it':'its due date')
+        + '.<br><span style="color:var(--text3);font-size:12px;">Next one would be due '
+        + formatDate(nextRepeatDate(t)) + '.</span>'
+      + '</div></div>';
+  }
+
+  if (isPaused(t)) {
+    body += '<div class="detail-section">'
+      + '<div class="detail-section-label">Paused</div>'
+      + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">'
+        + '<span class="paused-until">\u23f8\ufe0f back on '+formatDate(t.snoozedUntil)+'</span>'
+        + '<button class="btn btn-ghost btn-sm" onclick="resumeTaskFromDetail()">\u25b6\ufe0f Resume now</button>'
+      + '</div></div>';
+  }
+
   if (t.note || t.richBody) {
     body += '<div class="detail-section">';
     body += '<div class="detail-section-label">Notes</div>';
@@ -3050,7 +3415,7 @@ function openDetail(elOrId) {
   if (history.length) {
     body += '<div class="detail-section">';
     body += '<div class="detail-section-label">History</div>';
-    const histLabels = {created:'Task created',edited:'Task edited',completed:'Marked as done',reopened:'Reopened',merged:'Merged with another task'};
+    const histLabels = {created:'Task created',edited:'Task edited',completed:'Marked as done',reopened:'Reopened',merged:'Merged with another task',repeated:'Created by a repeat'};
     history.slice().reverse().forEach(function(h) {
       body += '<div class="history-item">'
         +'<div class="history-dot"></div>'
@@ -3070,6 +3435,8 @@ function openDetail(elOrId) {
   check.className = 'check-box' + (t.done ? ' checked' : '');
   document.getElementById('detailDoneLabel').textContent = t.done ? 'Completed' : 'Mark done';
   document.getElementById('detailRichBtn').style.display = t.richBody ? 'inline-flex' : 'none';
+  var pb=document.getElementById('detailPauseBtn');
+  if(pb)pb.textContent=isPaused(t)?'\u23f8\ufe0f Paused':'\u23f8\ufe0f Pause';
 
   document.getElementById('detailOverlay').classList.remove('hidden');
 }
@@ -3138,6 +3505,12 @@ function editFromDetail() {
   openEdit(id);
 }
 
+async function resumeTaskFromDetail(){
+  var id=detailTaskId;
+  closeDetail();
+  await resumeTaskById(id);
+}
+
 function richFromDetail() {
   const id = detailTaskId;
   closeDetail();
@@ -3149,8 +3522,10 @@ function toggleDoneFromDetail() {
   const t = tasks.find(x => x.id === detailTaskId);
   if (!t) return;
   const hist = JSON.parse(JSON.stringify(t.history || []));
-  hist.push({type: !t.done ? 'completed' : 'reopened', time: Date.now()});
-  db.collection('tasks').doc(detailTaskId).update({done: !t.done, history: hist}).then(() => {
+  const wasDone = !!t.done;
+  hist.push({type: wasDone ? 'reopened' : 'completed', time: Date.now()});
+  db.collection('tasks').doc(detailTaskId).update({done: !wasDone, history: hist}).then(() => {
+    if(!wasDone)spawnRepeat(t);
     const check = document.getElementById('detailCheck');
     const updated = !t.done;
     check.className = 'check-box' + (updated ? ' checked' : '');
@@ -3319,7 +3694,14 @@ function buildMergedData(a,b,c){
       ?mergeUniqBy(a.attachments,b.attachments,function(x){return (x.name||'')+'|'+(x.size||0);})
       :(a.attachments||[]).slice(),
     comments:(a.comments||[]).concat(b.comments||[]).sort(function(x,y){return (x.time||0)-(y.time||0);}),
-    done:!!a.done
+    done:!!a.done,
+    // Keep whichever pause wakes first, so a merge never hides work for longer than either
+    // task was already hidden.
+    snoozedUntil:(function(){
+      var pa=isPaused(a)?a.snoozedUntil:'', pb=isPaused(b)?b.snoozedUntil:'';
+      if(pa&&pb)return pa<pb?pa:pb;
+      return pa||pb||'';
+    })()
   };
   // Keep the long form in richBody so it opens in the note editor; note stays the preview.
   if(isHtml){
@@ -3807,6 +4189,9 @@ window.addEventListener('popstate', function(e) {
   if (!document.getElementById('lightbox').classList.contains('hidden')) {
     closeLightbox(); history.pushState(null,'',location.href); return;
   }
+  if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
+    closePause(); history.pushState(null,'',location.href); return;
+  }
   if (!document.getElementById('importOverlay').classList.contains('hidden')) {
     closeImport(); history.pushState(null,'',location.href); return;
   }
@@ -3837,6 +4222,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     // the lightbox sits above everything, so it closes first
     if(!document.getElementById('lightbox').classList.contains('hidden')){closeLightbox();return;}
+    if(!document.getElementById('pauseOverlay').classList.contains('hidden')){closePause();return;}
     if(!document.getElementById('importOverlay').classList.contains('hidden')){closeImport();return;}
     if(!document.getElementById('mergePreviewOverlay').classList.contains('hidden')){closeMergePreview();return;}
     if(!document.getElementById('mergePickerOverlay').classList.contains('hidden')){closeMergePicker();return;}

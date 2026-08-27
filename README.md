@@ -13,7 +13,7 @@ served as a static file, with Google sign-in and a Firestore backend.
 
 | | |
 |---|---|
-| Source | `index.html` — HTML, CSS and JavaScript in one file (~3,600 lines) |
+| Source | `index.html` — HTML, CSS and JavaScript in one file (~4,300 lines) |
 | Build | None. The file is the artifact. |
 | Backend | Firebase project `workboard-b9078` (Firestore + Google Auth) |
 | Runtime deps | Firebase 10.14.1 (compat SDK), Google Fonts — both via CDN |
@@ -39,9 +39,13 @@ python -m http.server 8000     # then open http://localhost:8000
 2. Commit and push to `main`.
 3. GitHub Pages redeploys within a minute or two. Hard-refresh to bypass the cache.
 
-There is no staging environment and no test suite. A push to `main` is a deploy, and the
-deployed app talks to the production Firestore immediately — there is no second copy of the
-data to break safely. Open the file locally and click through the affected screens first.
+There is no staging environment. A push to `main` is a deploy, and the deployed app talks
+to the production Firestore immediately — there is no second copy of the data to break
+safely. Run the tests and click through the affected screens first.
+
+Tests live outside this repository, in `NCS Projects\WorkBoard Claude\tests`, and read
+functions straight out of `index.html` rather than a copy. See `START-HERE.md` there for how
+to run them.
 
 > **Note on history:** commits before May 2026 were made by uploading the file through
 > the GitHub web UI, so they all read "Add files via upload" and carry no description of
@@ -84,6 +88,23 @@ API keys identify a project rather than authorising access to it. This repositor
 public is therefore not a key leak — but it does mean the rules carry the entire security
 burden, and that the app's URL is discoverable.
 
+## Pausing and repeating
+
+**Pause** puts a task aside until a date. Open a task, choose **Pause**, pick a preset or a
+date. A paused task leaves the board, the Today list and the counts, and comes back on its
+own on the day chosen — nothing needs to run for that to happen. Paused tasks live on their
+own **⏸️ Paused** page, and search still finds them the whole time.
+
+**Repeat** is set per task in the editor: every *n* days, weeks or months, counted either
+from the task's due date or from the day it is finished. Ticking the task off creates the
+next occurrence there and then, with the action items reset and the attachments left
+behind. Nothing is scheduled server-side.
+
+**Filters** combine as OR inside a group and AND across groups: DK + NO gives tasks from DK
+*or* NO; add the person Martin and you get those *also* assigned to Martin. This changed in
+August 2026 — it used to require a task to carry every selected value at once, which meant
+picking two sites usually returned nothing.
+
 ## Backup and restore
 
 **Settings → Data backup.** Export writes one JSON file containing tasks, trash, sites,
@@ -119,5 +140,10 @@ Fixed in August 2026 and described in ARCHITECTURE.md:
 - Attachments were base64 inside the task document, so two images on one task breached
   Firestore's 1 MiB limit and the save failed silently. Payloads now live one per document
   in `attachments/`, with a small thumbnail on the task.
+- The bottom navigation bar never displayed. `.bottom-nav` was `display:none` with nothing
+  to turn it on, and the top nav tabs are hidden below 700px, so on a phone there was no
+  way to reach Today, Done, Filter or Settings at all.
+- Filters required a task to carry *every* selected site, person and label at once, so
+  selecting two sites usually returned an empty board.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.

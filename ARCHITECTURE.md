@@ -104,7 +104,9 @@ the same change as the collection; without it every attachment write returns
 | `links` | `[{name, url}]` | `https://` prefixed automatically if missing. |
 | `attachments` | `[{id, name, type, size, thumb}]` | References into `attachments/{id}`, plus a small JPEG thumbnail so the board renders without extra reads. Entries written before August 2026 instead hold `{name, type, size, data}` with the full base64 inline; both forms are read correctly. |
 | `comments` | `[{text, time}]` | `time` is `Date.now()` ms, not a Firestore timestamp. |
-| `history` | `[{type, time}]` | `type` ∈ `created`, `edited`, `completed`, `reopened`, `merged`. |
+| `history` | `[{type, time}]` | `type` ∈ `created`, `edited`, `completed`, `reopened`, `merged`, `repeated`. |
+| `snoozedUntil` | `'YYYY-MM-DD'` \| `''` | Pause. While this is **strictly after** today the task is off the board. Empty or absent means not paused. Compared as a string, like `date`. |
+| `repeat` | `{n, unit, from}` \| `null` | Repeat rule. `unit` ∈ `day`, `week`, `month`; `n` is 1–365; `from` is `'due'` or `'done'`, the anchor the next date is counted from. `null` means no repeat. |
 | `done` | boolean | |
 | `createdAt` / `updatedAt` | serverTimestamp | `createdAt` drives the default query order. |
 
@@ -171,14 +173,20 @@ Other state: `viewMode` (`list`/`grid`/`kanban`), `detailTaskId`, `modalAttachme
 
 ### Pages
 
-`showPage(p)` toggles `#page-{board,today,done,rich,settings}`. `board` and
+`showPage(p)` toggles `#page-{board,today,paused,done,rich,settings}`. `board` and
 `rich` use `display:flex`, the others `display:block`. There is no router and no URL state
 — reloading always lands on Board.
+
+Every page appears twice in the markup: as a `.nav-tab` in the top bar (desktop) and as a
+`.bottom-nav-item` in the bottom bar (phone, ≤700px, where `.nav-tabs` is hidden). Adding a
+page means adding **both**, and adding it to the array inside `showPage`, which is what
+sets the `active` class on either.
 
 | Page | Nav | Contents |
 |---|---|---|
 | `board` | 📋 Board | Filter panel, task list, Today side panel |
 | `today` | 📅 Today | Today focus list **and** a separate "Due today" list |
+| `paused` | ⏸️ Paused | Tasks with a future `snoozedUntil`, soonest wake first |
 | `done` | ✅ Done | Completed tasks |
 | `rich` | *none* | Full-page note editor; entered via "+ Note" or a 📝 button |
 | `settings` | ⚙️ Settings | Sites, People, Labels, defaults, Trash, Account |
@@ -190,7 +198,7 @@ Other state: `viewMode` (`list`/`grid`/`kanban`), `detailTaskId`, `modalAttachme
 | `Ctrl/Cmd + K` | Focus the board search box (switches to Board first) |
 | `Ctrl/Cmd + Shift + K` | New task |
 | `Ctrl/Cmd + B` / `I` | Bold / italic, only while the note editor body has focus |
-| `Esc` | Closes the topmost overlay: the lightbox, then import, merge, then the modals |
+| `Esc` | Closes the topmost overlay: the lightbox, then import, merge, the pause dialog, then the modals |
 
 The browser Back button is intercepted by a `popstate` handler that closes the topmost
 overlay instead of leaving the page.
@@ -227,12 +235,21 @@ the visible count can exceed the number of tasks. Tasks with no value land in a
 
 ### Filtering
 
-`getFiltered(mode)`. Modes: `board`, `today`, `done`, `search`.
+`getFiltered(mode)`. Modes: `board`, `today`, `paused`, `done`, `search`.
 
-**Filters combine with AND, not OR.** The code is
-`afS.every(s => (t.sites||[]).includes(s))` — selecting DK *and* NO shows only tasks tagged
-with **both**, not either. Same for people and labels. Priority and overdue use OR/boolean.
-If users report "the filter hides everything", this is why.
+**Filters are OR within a group and AND across groups.** The code is
+`afS.some(s => (t.sites||[]).includes(s))` — selecting DK *and* NO shows tasks tagged with
+DK **or** NO. Add the person Martin on top and you get *(DK or NO) and Martin*. Sites,
+people and labels each behave that way; priority and overdue are unchanged.
+
+This changed in August 2026. It used to be `every()`, meaning DK + NO showed only tasks
+carrying **both** — which for a board where a task usually has one site meant selecting two
+sites returned nothing. If anything downstream assumed intersection semantics, that
+assumption is now wrong.
+
+**Paused tasks are excluded from every mode except `search`.** `board`, `today` and the
+badge counts all skip them; search deliberately still finds them, so a paused task is never
+lost. The `paused` mode is the inverse: unfinished tasks where `isPaused(t)` is true.
 
 Search matches title, note, richBody, sites, persons, tags and comment text, and is the
 only mode that includes completed tasks.
@@ -434,6 +451,58 @@ If B was pinned in Today focus, the pin is moved to A rather than left pointing 
 deleted document. The trash copy of B carries `mergedInto: <A's id>` alongside the usual
 `originalId`, so a merge is distinguishable from a plain delete.
 
+### Pausing a task
+
+A pause is a single field: `snoozedUntil`, a `'YYYY-MM-DD'` string. `isPaused(t)` is
+`t.snoozedUntil > todayStr()` — **strictly** greater, so a task wakes up *on* its date
+rather than the day after, and a date in the past is simply not a pause. Nothing runs on a
+schedule and nothing clears the field: a woken task keeps its old `snoozedUntil` value
+harmlessly, and `resumeTaskById` blanks it only when the user resumes by hand.
+
+`openPause(id)` → `pauseUntil(dateStr)` → the Firestore write. The dialog offers five
+presets (tomorrow, +3 days, next week, +2 weeks, next month) and a date input;
+`pauseUntil` refuses anything at or before today. Pausing a task that is pinned in Today
+focus also unpins it — the point of pausing is "not now", and leaving it pinned would
+contradict the disappearance from the board.
+
+Where a pause shows up: the ⏸️ Paused page and its nav badge, a `.task-paused-chip` on
+the task row (visible in search results, since the board excludes paused tasks), a Paused
+section in the detail modal with a **Resume now** button, and the detail footer button,
+which reads *Pause* or *Paused* depending on state.
+
+A merge keeps whichever pause wakes first, so folding a paused task into an active one does
+not silently unpause it.
+
+### Repeating tasks
+
+The rule lives on the task as `repeat: {n, unit, from}`. Nothing is scheduled: **the next
+occurrence is created at the moment a repeating task is ticked off**, by `spawnRepeat(t)`,
+called from `toggleDone`, `toggleDoneFromDetail` and `toggleTodayItemDone`. Re-opening a
+completed task does not spawn anything (the callers check `wasDone` first), and a task with
+no rule spawns nothing.
+
+`nextRepeatDate(t)` computes the date:
+
+- `from: 'due'` counts from `t.date`, `from: 'done'` from today. A `'due'` rule on a task
+  with no due date falls back to today.
+- `unit` steps by `addDays` (day, week × 7) or `addMonths` (month). `addMonths` **clamps to
+  the end of the shorter month**: 31 January + 1 month is 28 February, not 3 March.
+- Dates are built by `dateFromStr`, which parses `'YYYY-MM-DDT12:00:00'` — **local noon**, so
+  neither a DST shift nor a UTC conversion can move the day.
+- Counting from a due date that is long past would produce a next date that is already
+  overdue, so the loop keeps stepping until it lands after today. It preserves the weekday
+  of a weekly rule and the day-of-month of a monthly one.
+
+The new occurrence copies title, note, `richBody`/`richHtml`, priority, sites, persons,
+labels and links; carries the action items along **unticked** (they are the recipe, not the
+record); and starts with `history: [{type:'repeated'}]`, an empty comment list and
+`snoozedUntil: ''`.
+
+**Attachments deliberately do not come along.** Payload documents in `attachments/` are
+referenced by id, so copying the references would give two tasks the same payloads — and
+permanently deleting one occurrence would take the other's images with it. If that is ever
+changed, the payload documents have to be copied too.
+
 ---
 
 ## 5. Known defects and constraints
@@ -447,6 +516,14 @@ name rather than number, so fixing one does not renumber the rest.
 handlers were also malformed until August 2026; that is fixed, but the markup is still
 unreachable. Either add a `.task-card-grid:hover` rule to reveal them, or delete the markup.
 Not urgent: the card opens the detail modal, which offers the same actions.
+
+**The bottom navigation was dead markup until August 2026.**
+`.bottom-nav` was `display:none` in the base rule, and the only other rule mentioning it
+hid it again above 700px — nothing ever turned it on. Since `.nav-tabs` *is* hidden below
+700px, a phone had no navigation at all: no way to reach Today, Paused, Done, Filter or
+Settings. Fixed by adding `.bottom-nav{display:block;}` inside the `max-width:700px` block.
+A browser test now asserts it is visible, positioned at the bottom, and lists all six
+destinations, so this cannot regress unnoticed.
 
 **Sign-out does not reset every guard.**
 `handleUser()` now releases all seven listeners and clears their handles, so a later
