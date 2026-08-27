@@ -88,20 +88,21 @@ burden, and that the app's URL is discoverable.
 
 Confirmed by reading the source, in rough order of impact:
 
-1. **Rich-editor formatting is discarded on save.** The toolbar applies bold, headings and
-   lists in the editor, but `saveRichTask()` persists `.innerText`, so only plain text
-   survives.
-2. **"Draft saved" in the rich editor saves nothing.** `richAutoSave()` updates a label on
-   a timer and never writes to Firestore. Leaving the editor without pressing "Save to
-   Board" loses the work, after the UI said it was saved.
-3. **Drag-to-reorder in the Today panel throws.** `todayDragStart`, `todayDragOver` and
+1. **Attachments will hit the Firestore document limit.** Images are stored as base64 data
+   URLs inside the task document. The 500 KB per-file cap becomes ~683 KB encoded against a
+   hard 1 MiB per-document limit, so two images on one task fail to save. The merge flow
+   measures the result and refuses; the quick modal and note editor do not. A
+   `storageBucket` is configured but Firebase Storage is never used.
+2. **Drag-to-reorder in the Today panel throws.** `todayDragStart`, `todayDragOver` and
    `todayDrop` are referenced in the markup but never defined. The ↑/↓ buttons work.
-4. **Five broken `onclick` attributes.** A `\"` escaping mistake terminates the attribute
+3. **Five malformed `onclick` attributes.** A `\"` escaping mistake ends the attribute
    early, disabling the grid-view checkbox and edit/note buttons, and the attachment
    lightbox in both list view and the detail modal.
-5. **Attachments will hit the Firestore document limit.** Images are stored as base64 data
-   URLs inside the task document. The 500 KB per-file cap becomes ~683 KB encoded against
-   a hard 1 MiB per-document limit, so two images on one task fail to save. A
-   `storageBucket` is configured but Firebase Storage is never used.
+4. **`Ctrl+K` opens a new task, not search** — the search placeholder says otherwise.
+5. **SortableJS is loaded and never used** — ~40 KB of CDN JavaScript per page load.
+
+Fixed in August 2026, described in ARCHITECTURE.md under *The note editor*: the note
+editor used to discard all formatting on save, and its "Draft saved" label used to save
+nothing at all.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.

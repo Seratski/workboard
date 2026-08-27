@@ -154,6 +154,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .detail-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:6px;}
 .detail-note{font-size:13px;color:var(--text2);line-height:1.65;white-space:pre-wrap;}
 .detail-rich-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--accent);}
+.detail-rich-body.is-html{white-space:normal;}
+.detail-rich-body.is-html h1{font-size:16px;font-weight:600;color:var(--text);margin:10px 0 5px;}
+.detail-rich-body.is-html h2{font-size:14px;font-weight:600;color:var(--text);margin:9px 0 4px;}
+.detail-rich-body.is-html h3{font-size:13px;font-weight:600;color:var(--label);margin:8px 0 4px;}
+.detail-rich-body.is-html h1:first-child,.detail-rich-body.is-html h2:first-child,.detail-rich-body.is-html h3:first-child{margin-top:0;}
+.detail-rich-body.is-html b,.detail-rich-body.is-html strong{color:var(--text);font-weight:600;}
+.detail-rich-body.is-html ul,.detail-rich-body.is-html ol{margin:5px 0 5px 20px;}
+.detail-rich-body.is-html li{margin:2px 0;}
+.detail-rich-body.is-html hr{border:none;border-top:1px solid var(--border2);margin:11px 0;}
+.detail-rich-body.is-html p{margin:0 0 7px;}
+.detail-rich-body.is-html p:last-child{margin-bottom:0;}
 .detail-actions-list{display:flex;flex-direction:column;gap:5px;}
 .detail-action-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:7px;}
 .detail-action-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;}
@@ -1018,6 +1029,8 @@ let defaultPerson='';
 let viewMode='list';
 let fSites=[],fPersons=[],fProjects=[],fActions=[],editingId=null;
 let rSites=[],rPersons=[],rProjects=[],rActions=[],richEditingId=null,richAutoSaveTimer=null;
+let richDirty=false;
+const RICH_DRAFT_KEY='wb_rich_draft';
 let afS=[],afP=[],afT=[],afPr=[],afOv=false;
 let unsubTasks,unsubSites,unsubPersons,unsubProjects;
 
@@ -1294,7 +1307,7 @@ function getFiltered(mode){
     if(afT.length&&!afT.every(p=>(t.tags||[]).includes(p)))return false;
     if(afPr.length&&!afPr.includes(t.priority||'none'))return false;
     if(afOv&&!isOverdue(t.date))return false;
-    if(q){const comments=(t.comments||[]).map(function(c){return c.text||'';});const hay=[t.title||'',t.note||'',t.richBody||'',...(t.sites||[]),...(t.persons||[]),...(t.tags||[]),...comments].join(' ').toLowerCase();if(!hay.includes(q))return false;}
+    if(q){const comments=(t.comments||[]).map(function(c){return c.text||'';});const hay=[t.title||'',t.note||'',taskBodyText(t),...(t.sites||[]),...(t.persons||[]),...(t.tags||[]),...comments].join(' ').toLowerCase();if(!hay.includes(q))return false;}
     return true;
   });
 }
@@ -1377,6 +1390,41 @@ function kanbanCardHTML(t){
   if(actions.length)h+='<div class="kanban-card-progress"><div class="kanban-card-progress-fill" style="width:'+pct+'%"></div></div>';
   h+='</div>';
   return h;
+}
+
+// richBody is HTML when the task carries richHtml:true. Older tasks hold plain text.
+function richPlainText(html){
+  if(!html)return '';
+  // A detached element has no layout, so innerText would run block elements together
+  // ("Line oneLine two"). Turn block boundaries into newlines before extracting.
+  var tmp=document.createElement('div');
+  tmp.innerHTML=String(html)
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<hr\s*\/?>/gi,'\n')
+    .replace(/<\/(p|div|li|h1|h2|h3|ul|ol)\s*>/gi,'\n');
+  var t=tmp.innerText||tmp.textContent||'';
+  return t.replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim();
+}
+// Apply linkify() to the text nodes only, so URLs and @mentions still work inside HTML.
+function linkifyHtml(html){
+  var tmp=document.createElement('div');
+  tmp.innerHTML=html||'';
+  var walker=document.createTreeWalker(tmp,NodeFilter.SHOW_TEXT,null);
+  var nodes=[];
+  while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(function(n){
+    var t=n.nodeValue||'';
+    if(t.indexOf('http')===-1&&t.indexOf('@')===-1)return;
+    var span=document.createElement('span');
+    span.innerHTML=linkify(t);
+    if(n.parentNode)n.parentNode.replaceChild(span,n);
+  });
+  return tmp.innerHTML;
+}
+// Plain text of a task's body, for searching and for previews.
+function taskBodyText(t){
+  if(!t)return '';
+  return t.richHtml?richPlainText(t.richBody||''):(t.richBody||t.note||'');
 }
 
 function linkify(text){
@@ -1820,7 +1868,8 @@ function openRichEditor(id){
   if(id){
     const t=tasks.find(x=>x.id===id);if(!t)return;
     document.getElementById('richTitle').value=t.title||'';
-    document.getElementById('richBody').innerText=t.richBody||t.note||'';
+    if(t.richHtml)document.getElementById('richBody').innerHTML=sanitizeRichBody(t.richBody||'');
+    else document.getElementById('richBody').innerText=t.richBody||t.note||'';
     document.getElementById('richPriority').value=t.priority||'none';
     document.getElementById('richDate').value=t.date||'';
     rSites=[...(t.sites||[])];rPersons=[...(t.persons||[])];rProjects=[...(t.tags||[])];rActions=JSON.parse(JSON.stringify(t.actions||[]));rLinks=JSON.parse(JSON.stringify(t.links||[]));richAttachments=JSON.parse(JSON.stringify(t.attachments||[]));renderAttachPreview('rich');renderRichLinks();
@@ -1831,13 +1880,31 @@ function openRichEditor(id){
     document.getElementById('richPriority').value='none';
     document.getElementById('richDate').value=new Date().toISOString().slice(0,10);
     rSites=[];rPersons=defaultPerson?[defaultPerson]:[];rProjects=defaultLabel?[defaultLabel]:[];rActions=[];rLinks=[];richAttachments=[];renderAttachPreview('rich');renderRichLinks();
-    document.getElementById('richTaskStatus').textContent='Draft — not saved yet';
+    document.getElementById('richTaskStatus').textContent='Draft \u2014 not saved yet';
+    try{
+      var dr=JSON.parse(localStorage.getItem(RICH_DRAFT_KEY)||'null');
+      var hasContent=dr&&((dr.title||'').trim()||richPlainText(dr.bodyHtml||'').trim());
+      if(dr&&dr.savedAt&&(Date.now()-dr.savedAt)<7*86400000&&hasContent){
+        document.getElementById('richTitle').value=dr.title||'';
+        document.getElementById('richBody').innerHTML=sanitizeRichBody(dr.bodyHtml||'');
+        document.getElementById('richPriority').value=dr.priority||'none';
+        document.getElementById('richDate').value=dr.date||'';
+        rSites=(dr.sites||[]).slice();rPersons=(dr.persons||[]).slice();rProjects=(dr.tags||[]).slice();
+        rActions=dr.actions||[];rLinks=dr.links||[];richAttachments=dr.attachments||[];
+        renderAttachPreview('rich');renderRichLinks();
+        document.getElementById('richTaskStatus').textContent='Unsaved draft restored';
+        showToast('Unsaved draft restored \u2713');
+      }
+    }catch(e){}
   }
+  richDirty=false;
+  clearTimeout(richAutoSaveTimer);
   renderRichChips();
   showPage('rich');
   setTimeout(()=>{var el=document.getElementById(id?'richTitle':'richBody');if(el){el.focus();if(!id){var range=document.createRange();var sel=window.getSelection();range.selectNodeContents(el);range.collapse(false);sel.removeAllRanges();sel.addRange(range);}}},100);
 }
 function closeRichEditor(){
+  richFlush(); // don't drop a debounce that has not fired yet
   document.getElementById('appShell').classList.remove('rich-open');showPage('board');}
 
 function sanitizeRichBody(html){
@@ -1900,24 +1967,88 @@ document.addEventListener('keydown',function(e){
 });
 
 
+function richStatus(msg){var el=document.getElementById('richSaveStatus');if(el)el.textContent=msg;}
+
+function richSnapshot(){
+  return {
+    title:document.getElementById('richTitle').value.trim(),
+    bodyHtml:sanitizeRichBody(document.getElementById('richBody').innerHTML||''),
+    priority:document.getElementById('richPriority').value,
+    date:document.getElementById('richDate').value,
+    sites:rSites.slice(),persons:rPersons.slice(),tags:rProjects.slice(),
+    actions:JSON.parse(JSON.stringify(rActions)),
+    links:JSON.parse(JSON.stringify(rLinks)),
+    attachments:JSON.parse(JSON.stringify(richAttachments))
+  };
+}
+
+function clearRichDraft(){try{localStorage.removeItem(RICH_DRAFT_KEY);}catch(e){}}
+
+// Debounced. An already-saved note is written to Firestore; a brand-new one is kept in
+// localStorage so half-finished notes never appear on the board.
 function richAutoSave(){
-  document.getElementById('richSaveStatus').textContent='Saving…';
+  richDirty=true;
+  richStatus('Saving\u2026');
   clearTimeout(richAutoSaveTimer);
-  richAutoSaveTimer=setTimeout(()=>{
-    document.getElementById('richSaveStatus').textContent='Draft saved';
-    setTimeout(()=>document.getElementById('richSaveStatus').textContent='',2000);
-  },800);
+  richAutoSaveTimer=setTimeout(function(){richFlush();},1200);
+}
+
+async function richFlush(){
+  clearTimeout(richAutoSaveTimer);
+  if(!richDirty)return;
+  var snap=richSnapshot();
+  if(richEditingId){
+    var data={
+      richBody:snap.bodyHtml,richHtml:true,
+      note:richPlainText(snap.bodyHtml).substring(0,500),
+      priority:snap.priority,date:snap.date,
+      sites:snap.sites,persons:snap.persons,tags:snap.tags,
+      actions:snap.actions,links:snap.links,attachments:snap.attachments,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    };
+    // Never blank an existing title just because the field is empty mid-retype.
+    if(snap.title)data.title=snap.title;
+    try{
+      await db.collection('tasks').doc(richEditingId).update(data);
+      richDirty=false;
+      richStatus('Saved to board');
+      setTimeout(function(){if(!richDirty)richStatus('');},2500);
+    }catch(e){
+      richStatus('NOT saved: '+(e.code||e.message||'error'));
+    }
+    return;
+  }
+  snap.savedAt=Date.now();
+  try{
+    localStorage.setItem(RICH_DRAFT_KEY,JSON.stringify(snap));
+    richDirty=false;
+    richStatus('Draft saved locally');
+  }catch(e){
+    // Almost always the ~5MB quota, blown by base64 attachments.
+    try{
+      localStorage.setItem(RICH_DRAFT_KEY,JSON.stringify(Object.assign({},snap,{attachments:[]})));
+      richDirty=false;
+      richStatus('Draft saved locally, without attachments');
+    }catch(e2){
+      richStatus('Draft too large to store locally');
+    }
+  }
+  setTimeout(function(){if(!richDirty)richStatus('');},2500);
 }
 
 async function saveRichTask(){
   const title=document.getElementById('richTitle').value.trim();
   if(!title){document.getElementById('richTitle').focus();showToast('Add a title first');return;}
+  clearTimeout(richAutoSaveTimer);
+  richDirty=false; // an explicit save supersedes any pending autosave
   const newPTs=rProjects.filter(p=>!projectTasks.includes(p));
   if(newPTs.length)await db.collection('meta').doc('projectTasks').set({list:[...projectTasks,...newPTs]});
+  const bodyHtml=sanitizeRichBody(document.getElementById('richBody').innerHTML||'');
   const data={
     title,
-    richBody:document.getElementById('richBody').innerText||document.getElementById('richBody').textContent||'',
-    note:(document.getElementById('richBody').innerText||'').substring(0,500),
+    richBody:bodyHtml,
+    richHtml:true,
+    note:richPlainText(bodyHtml).substring(0,500),
     priority:document.getElementById('richPriority').value,
     date:document.getElementById('richDate').value,
     sites:[...rSites],persons:[...rPersons],tags:[...rProjects],
@@ -1938,12 +2069,16 @@ async function saveRichTask(){
     data.createdAt=firebase.firestore.FieldValue.serverTimestamp();
     data.history=[{type:'created',time:Date.now()}];
     await db.collection('tasks').add(data);
-    showToast('Task saved to Board ✓');
+    clearRichDraft();
+    showToast('Task saved to Board \u2713');
   }
   closeRichEditor();
 }
 function deleteRichDraft(){
   if(richEditingId){if(!confirm('Delete this task?'))return;db.collection('tasks').doc(richEditingId).delete();showToast('Deleted');}
+  else{clearRichDraft();showToast('Draft discarded');}
+  clearTimeout(richAutoSaveTimer);
+  richDirty=false;
   closeRichEditor();
 }
 
@@ -2226,7 +2361,9 @@ function openDetail(elOrId) {
     body += '<div class="detail-section">';
     body += '<div class="detail-section-label">Notes</div>';
     if (t.richBody) {
-      body += '<div class="detail-rich-body">'+linkify(t.richBody)+'</div>';
+      body += t.richHtml
+        ? '<div class="detail-rich-body is-html">'+linkifyHtml(sanitizeRichBody(t.richBody))+'</div>'
+        : '<div class="detail-rich-body">'+linkify(t.richBody)+'</div>';
     } else if (t.note) {
       body += '<div class="detail-note">'+linkify(t.note)+'</div>';
     }
@@ -2409,7 +2546,20 @@ let mergeChoice={title:'a',priority:'a',date:'a',text:'both',secAttach:true};
 const MERGE_SIZE_WARN=900000;   // ~880KB: getting close to the Firestore limit
 const MERGE_SIZE_BLOCK=1000000; // ~977KB: refuse, the 1MiB doc limit would reject the write
 
-function mergeBodyText(t){return (t.richBody||t.note||'');}
+// Plain text, for the side-by-side preview.
+function mergeBodyText(t){return taskBodyText(t);}
+// HTML form, for what actually gets stored. A plain-text body is wrapped so it can be
+// concatenated with an HTML one without losing its line breaks.
+function mergeBodyHtml(t){
+  if(!t)return '';
+  if(t.richHtml&&t.richBody)return sanitizeRichBody(t.richBody);
+  var plain=t.richBody||t.note||'';
+  if(!plain.trim())return '';
+  return '<p>'+escHtml(plain).replace(/\n/g,'<br>')+'</p>';
+}
+function mergeJoinHtml(ha,hb){
+  return [ha,hb].filter(function(x){return x&&x.trim();}).join('<hr>');
+}
 function mergeUniq(a,b){
   var out=(a||[]).slice();
   (b||[]).forEach(function(v){if(out.indexOf(v)===-1)out.push(v);});
@@ -2440,7 +2590,7 @@ function renderMergePicker(){
   var list=tasks.filter(function(t){
     if(t.id===detailTaskId)return false;
     if(!q)return true;
-    var hay=[t.title||'',t.note||'',t.richBody||''].concat(t.sites||[],t.persons||[],t.tags||[]).join(' ').toLowerCase();
+    var hay=[t.title||'',t.note||'',taskBodyText(t)].concat(t.sites||[],t.persons||[],t.tags||[]).join(' ').toLowerCase();
     return hay.indexOf(q)!==-1;
   });
   var el=document.getElementById('mergePickerList');
@@ -2520,10 +2670,14 @@ function mergeJoinText(ta,tb){
 }
 
 function buildMergedData(a,b,c){
-  var ta=mergeBodyText(a), tb=mergeBodyText(b), text;
-  if(c.text==='a')text=ta;
-  else if(c.text==='b')text=tb;
-  else text=mergeJoinText(ta,tb);
+  var ta=mergeBodyText(a), tb=mergeBodyText(b);
+  // If either side is a formatted note, the result has to be HTML or the markup would
+  // end up displayed as literal text.
+  var isHtml=!!(a.richHtml||b.richHtml);
+  var text, html;
+  if(c.text==='a'){text=ta;html=mergeBodyHtml(a);}
+  else if(c.text==='b'){text=tb;html=mergeBodyHtml(b);}
+  else {text=mergeJoinText(ta,tb);html=mergeJoinHtml(mergeBodyHtml(a),mergeBodyHtml(b));}
   var data={
     title:(c.title==='a'?a.title:b.title)||'',
     priority:(c.priority==='a'?a.priority:b.priority)||'none',
@@ -2540,8 +2694,16 @@ function buildMergedData(a,b,c){
     done:!!a.done
   };
   // Keep the long form in richBody so it opens in the note editor; note stays the preview.
-  if(text.length>500||a.richBody||b.richBody){data.richBody=text;data.note=text.slice(0,500);}
-  else{data.note=text;}
+  if(isHtml){
+    data.richBody=html;
+    data.richHtml=true;
+    data.note=richPlainText(html).slice(0,500);
+  } else if(text.length>500||a.richBody||b.richBody){
+    data.richBody=text;
+    data.note=text.slice(0,500);
+  } else {
+    data.note=text;
+  }
   var hist=(a.history||[]).concat(b.history||[]).sort(function(x,y){return (x.time||0)-(y.time||0);});
   hist.push({type:'merged',time:Date.now()});
   data.history=hist;

@@ -5,8 +5,8 @@ refer to `index.html` as of commit `56865e7` (1 May 2026, 2,507 lines). They wil
 the section names and function names are the stable landmarks.
 
 Several things in this app do not do what their names suggest. Those are called out in
-**[Known defects and constraints](#known-defects-and-constraints)** — read that section
-before touching the rich editor, attachments, or anything to do with per-user data.
+**[Known defects and constraints](#5-known-defects-and-constraints)** — read that section
+before touching attachments, the Today list, or anything to do with per-user data.
 
 ---
 
@@ -39,7 +39,7 @@ interaction, long after parsing. Anything added at the end of the file must go b
 | `firebase-app-compat` | 10.14.1 | SDK core |
 | `firebase-auth-compat` | 10.14.1 | Google sign-in |
 | `firebase-firestore-compat` | 10.14.1 | All persistence |
-| `sortablejs` | 1.15.2 | **nothing — see defect 7** |
+| `sortablejs` | 1.15.2 | **nothing — loaded and never used** |
 | Google Fonts | — | DM Sans, DM Mono |
 
 The Firebase **compat** SDK is used, not the modular v9+ API. Calls look like
@@ -78,7 +78,7 @@ meta/todayFocus         { items: [{id, title, done}] }
 ```
 
 `storageBucket` is configured but **Firebase Storage is never used**. Attachments go into
-the task document as base64 (see defect 5).
+the task document as base64 (see *Attachments and the document limit*).
 
 #### `tasks/{id}` document
 
@@ -86,7 +86,8 @@ the task document as base64 (see defect 5).
 |---|---|---|
 | `title` | string | |
 | `note` | string | Short note. Rich saves put the first 500 chars of the body here. |
-| `richBody` | string | Present only for tasks made in the rich editor. **Plain text** — see defect 1. Its presence is what makes the 📝 button appear. |
+| `richBody` | string | The note body, present only for tasks made in the note editor. HTML when `richHtml` is true, otherwise plain text. Its presence is what makes the 📝 button appear. |
+| `richHtml` | boolean | True on notes saved since August 2026, meaning `richBody` holds sanitized HTML. Absent on older notes, which hold plain text. **Always branch on this** — rendering plain text as HTML or vice versa is the failure mode. |
 | `priority` | `'none'` \| `'high'` \| `'medium'` \| `'low'` | |
 | `date` | `'YYYY-MM-DD'` | Due date. Compared as a string throughout — no `Date` parsing. |
 | `sites` | string[] | Free strings, validated only against `meta/sites` in the UI. |
@@ -184,7 +185,7 @@ meanings, two different counts on screen at once.
 ### Board view modes
 
 - **list** (`taskHTML`, line 1345) — the full-detail row: stripe, checkbox, tags, links, note, action progress, attachments.
-- **grid** (`taskCardHTML`, line 1317) — compact cards. Several controls here are broken; see defect 4.
+- **grid** (`taskCardHTML`, line 1317) — compact cards. Several controls here are broken; see *Five malformed `onclick` attributes*.
 - **kanban** (`kanbanCardHTML`, line 1290) — three columns, **bucketed by priority** (High / Medium / Other), not by status. Cards cannot be dragged between columns; it is a read-only three-way split.
 
 ### Sorting and grouping
@@ -213,6 +214,40 @@ only mode that includes completed tasks.
 called on exactly one element: the detail-modal comment box. `linkify()` (line 1310) renders
 `@name` as a clickable span that pushes the mention into the search box. The mention regex
 allows one or two words, so three-part names are only partly matched.
+
+### The note editor
+
+The full-page editor reached via "+ Note" or a 📝 button. Left side is a `contenteditable`
+with a formatting toolbar (bold, italic, H1, H2, bullet list, numbered list, divider) driven
+by `document.execCommand`. Right side holds the same structured fields as the quick modal.
+
+**Formatting is persisted as HTML.** `saveRichTask()` and `richFlush()` store
+`sanitizeRichBody(richBody.innerHTML)` in `richBody` and set `richHtml: true`; `note` holds
+`richPlainText()` of that HTML, capped at 500 characters, as the preview shown on cards and
+rows. `sanitizeRichBody` allows only `B STRONG I EM U H1 H2 H3 UL OL LI BR HR P DIV SPAN`,
+replaces anything else with its text, and strips every attribute — so pasted markup, script
+tags and event handlers cannot survive a round trip.
+
+Notes written before August 2026 have no `richHtml` flag and hold plain text. Every read
+path branches on the flag: `openRichEditor` assigns `innerHTML` or `innerText` accordingly,
+the detail modal renders `linkifyHtml(...)` inside `.detail-rich-body.is-html` or
+`linkify(...)` inside plain `.detail-rich-body`, and `taskBodyText()` returns plain text for
+searching either way. `linkifyHtml` walks text nodes only, so URLs and `@mentions` still
+become links without corrupting the surrounding markup.
+
+**Autosave is real.** `richAutoSave()` marks the editor dirty and debounces `richFlush()` by
+1.2 s. For a note that already exists, `richFlush` writes to Firestore and the status line
+says "Saved to board" — it deliberately omits `history`, so autosave does not spam the
+timeline, and it omits `title` when the field is empty so an in-progress retype cannot blank
+an existing task's title. For a note that has never been saved, it writes the whole editor
+state to `localStorage` under `wb_rich_draft` instead, so half-finished notes never appear
+on the board; `openRichEditor(null)` offers that draft back for seven days, and an explicit
+save or discard clears it. If the draft exceeds the storage quota — base64 attachments are
+the usual cause — it retries without attachments and says so. `closeRichEditor()` flushes a
+pending debounce rather than dropping it.
+
+The consequence worth knowing: editing an existing note has no cancel. Changes reach the
+board a second or so after you stop typing.
 
 ### Merging two tasks
 
@@ -245,7 +280,7 @@ If the result exceeds 500 characters, or either side had a `richBody`, the text 
 to `richBody` with `note` holding the first 500 characters — matching what
 `saveRichTask()` does.
 
-Because attachments are base64 inside the document (defect 5), merging two tasks that both
+Because attachments are base64 inside the document, merging two tasks that both
 carry images can exceed the 1 MiB limit. The preview shows the serialized size, warns above
 ~880 KB, and disables the confirm button above ~977 KB rather than letting the write fail
 silently. Excluding B's attachments is the escape hatch.
@@ -258,84 +293,60 @@ deleted document. The trash copy of B carries `mergedInto: <A's id>` alongside t
 
 ## 5. Known defects and constraints
 
-Confirmed by reading the source, not by guessing. Roughly ordered by impact.
+Confirmed by reading the source, not by guessing. Roughly ordered by impact. Referred to by
+name rather than number, so fixing one does not renumber the rest.
 
-**1. Rich-editor formatting is discarded on save.**
-`saveRichTask()` (line 1847) persists
-`document.getElementById('richBody').innerText`. The toolbar's bold, italic, H1, H2, bullet,
-numbered and divider commands all apply real formatting in the contenteditable, and all of
-it is dropped the moment you save. `openRichEditor()` likewise assigns `.innerText`, so
-nothing could round-trip even if it were stored. Fixing this means storing
-`.innerHTML`, running it through `sanitizeRichBody()` on the way in, and rendering it as
-HTML in the detail modal instead of through `linkify()`.
-
-**2. "Draft saved" in the rich editor is a lie.**
-`richAutoSave()` (line 1831) sets the status text to "Saving…", then on an 800 ms timer sets
-it to "Draft saved". It never writes to Firestore or localStorage. Navigating away without
-pressing "Save to Board" loses everything — after the UI reported it saved. This is the
-most likely cause of any "I lost my note" report.
-
-**3. Drag-to-reorder in the Today list throws.**
-`renderTodayFocus()` (line 1976) emits `ondragstart="todayDragStart(event,i)"`,
-`ondragover="todayDragOver(event)"` and `ondrop="todayDrop(event,i)"`. **None of the three
-functions exists** anywhere in the file. Dragging raises a `ReferenceError`. The ↑/↓ buttons
-(`moveTodayItem`) work fine, so the feature is not entirely absent — either implement the
-three handlers or drop the `draggable` attribute.
-
-**4. Five `onclick` attributes are malformed.**
-Lines 1330, 1338, 1339, 1386 and 2186 build handlers as `onclick="fn(\"'+id+'\")"`. Inside a
-single-quoted JS string `\"` is just `"`, so the emitted HTML is
-`onclick="toggleDone("abc123")"` — the attribute value terminates at the second quote and
-the handler is truncated to `toggleDone(`. Broken as a result:
-
-- grid view: the done checkbox, the ✏️ edit button, the 📝 note button;
-- list view: clicking an attachment thumbnail to open the lightbox;
-- detail modal: the same attachment thumbnails.
-
-The fix is to use `\'` (escaped single quotes) as every other call site in the file already
-does.
-
-**5. Attachments will hit the Firestore 1 MiB document limit.**
-`MAX_FILE_SIZE` is 500 KB per file (line 2340), but files are stored as base64 data URLs
-*inside the task document*. Base64 adds ~33%, so one 500 KB image is ~683 KB of the 1 MiB
-budget. **Two images on one task exceeds the limit and the write fails.** Comments,
-history and action items share the same budget. A `storageBucket` is already provisioned —
+**Attachments and the document limit.**
+`MAX_FILE_SIZE` is 500 KB per file, but files are stored as base64 data URLs *inside* the
+task document. Base64 adds ~33%, so one 500 KB image is ~683 KB of a hard 1 MiB
+per-document budget that comments, history and action items also share. **Two images on one
+task exceeds the limit and the write fails.** A `storageBucket` is already provisioned;
 moving attachments to Firebase Storage and keeping only URLs in the document is the real
-fix. Meanwhile, lowering the cap to ~200 KB would at least keep failures rare.
+fix. The merge flow guards against this (it measures the result and refuses), but the quick
+modal and the note editor do not — they will simply fail to save.
 
-**6. `Ctrl+K` does not do what the UI says.**
-The search box placeholder reads "Search… (Ctrl+K)", but the keydown handler (line 2464)
-maps `Ctrl/Cmd+K` to `openModal()` — new task. Either change the placeholder or focus the
-search input.
+**Drag-to-reorder in the Today list throws.**
+`renderTodayFocus()` emits `ondragstart="todayDragStart(event,i)"`,
+`ondragover="todayDragOver(event)"` and `ondrop="todayDrop(event,i)"`. **None of the three
+functions exists** anywhere in the file, so dragging raises a `ReferenceError`. The ↑/↓
+buttons (`moveTodayItem`) work, so the feature is not entirely absent — either implement the
+handlers or drop the `draggable` attribute.
 
-**7. SortableJS is loaded and never used.**
-`new Sortable` appears zero times. ~40 KB of CDN JavaScript downloaded on every load for
-nothing. Either delete the script tag or use it to fix defect 3.
+**Five malformed `onclick` attributes.**
+Handlers built as `onclick="fn(\"'+id+'\")"`. Inside a single-quoted JS string `\"` is just
+`"`, so the emitted HTML is `onclick="toggleDone("abc123")"` — the attribute value ends at
+the second quote and the handler is truncated to `toggleDone(`. Broken as a result: the grid
+view's done checkbox, its ✏️ edit and 📝 note buttons, and the attachment lightbox in both
+list view and the detail modal. The fix is `\'` — escaped single quotes, as every other call
+site in the file already uses.
 
-**8. `sanitizeRichBody()` is dead code.**
-Defined at line 1771, called nowhere. It becomes necessary the moment defect 1 is fixed;
-until then it is inert.
+**`Ctrl+K` does not do what the UI says.**
+The search placeholder reads "Search… (Ctrl+K)" but the keydown handler maps `Ctrl/Cmd+K`
+to `openModal()` — new task. Change one or the other.
 
-**9. Completing a task from the detail modal skips history.**
-`toggleDone()` (line 1520) appends a `completed`/`reopened` history entry.
-`toggleDoneFromDetail()` (line 2312) writes only `{done: !t.done}`. The History section
-silently misses completions made from the detail modal.
+**SortableJS is loaded and never used.**
+`new Sortable` appears zero times. ~40 KB of CDN JavaScript on every load for nothing.
+Delete the script tag, or use it to fix the Today drag handlers.
 
-**10. Sign-out leaks listeners.**
+**Completing a task from the detail modal skips history.**
+`toggleDone()` appends a `completed`/`reopened` history entry. `toggleDoneFromDetail()`
+writes only `{done: !t.done}`, so the History section silently misses completions made from
+the detail modal.
+
+**Sign-out leaks listeners.**
 `handleUser()`'s else-branch unsubscribes `tasks`, `sites`, `persons` and `projectTasks`,
 but not `meta/settings`, `meta/todayFocus` or `trash`. `startTodayFocusListener()` and
-`startTrashListener()` both early-return if their unsub variable is truthy and never clear
+`startTrashListener()` both early-return when their unsub variable is truthy and never clear
 it, so those listeners survive a sign-out and stay attached under the next account.
 
-**11. `esc()` is incomplete.**
-`esc()` (line 1401) escapes backslashes and single quotes for interpolation into inline
-handlers, but not double quotes or `<`. A site, person or label containing a `"` will break
-the surrounding attribute. `escHtml()` handles text content correctly; the two are easy to
-reach for interchangeably and are not interchangeable.
+**`esc()` is incomplete.**
+`esc()` escapes backslashes and single quotes for interpolation into inline handlers, but
+not double quotes or `<`. A site, person or label containing a `"` breaks the surrounding
+attribute. `escHtml()` handles text content correctly; the two are easy to confuse and are
+not interchangeable.
 
-**12. Dead variables.** `modalAutoSaveTimer` and `modalDraftId` (lines 2336–2337) are never
-read. `fActions`'s declaration is grouped with the filter variables on line 947 despite
-being modal state.
+**Dead code.** `modalAutoSaveTimer` and `modalDraftId` are never read. `fActions` is declared
+alongside the filter variables despite being modal state.
 
 ### Structural constraints, not bugs
 
