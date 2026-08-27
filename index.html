@@ -464,9 +464,21 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .task-attach-img:hover{opacity:0.85;}
 .task-attach-file{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text2);cursor:pointer;text-decoration:none;}
 .task-attach-file:hover{border-color:var(--accent);color:var(--accent);}
-.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;display:flex;align-items:center;justify-content:center;cursor:zoom-out;}
-.lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:1000;display:flex;flex-direction:column;cursor:zoom-out;}
 .lightbox.hidden{display:none;}
+/* auto margins rather than align/justify-center: a zoomed image larger than the stage then
+   stays scrollable in both directions instead of having its top-left clipped away. */
+.lightbox-stage{flex:1;min-height:0;display:flex;overflow:auto;padding:16px;}
+.lightbox img{border-radius:8px;display:block;background:#111;margin:auto;}
+/* fit: sized against the viewport, so it scales UP as well as down and a small screenshot
+   is actually readable. Percentages cannot work here -- the stage is content-sized, so
+   width:100% would resolve against the image's own intrinsic width. */
+.lightbox img.fit{width:calc(100vw - 44px);height:calc(100vh - 104px);max-width:none;max-height:none;object-fit:contain;cursor:zoom-in;}
+.lightbox img.actual{width:auto;height:auto;max-width:none;max-height:none;flex:none;cursor:zoom-out;}
+.lightbox img.loading{filter:blur(5px);}
+.lightbox-bar{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border-top:1px solid var(--border);cursor:default;}
+.lightbox-name{font-size:12px;font-family:var(--mono);color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lightbox-status{font-size:11px;color:var(--text3);flex-shrink:0;}
 .paste-hint{font-size:11px;color:var(--text3);margin-top:4px;}
 .mobile-filter-bar{display:none;padding:8px 12px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
 .mobile-filter-bar::-webkit-scrollbar{display:none;}
@@ -3661,16 +3673,48 @@ function removeAttach(target, i) {
   renderAttachPreview(target);
 }
 
-// Show the thumbnail immediately, then swap in the full image once it arrives.
+// 'fit' scales the image to the stage in both directions, so a screenshot smaller than
+// the window is still readable. 'actual' shows it at 1:1 and lets the stage scroll, which
+// is what you want for small text in a large screenshot.
+let lightboxZoom='fit';
+function setLightboxZoom(mode){
+  lightboxZoom=mode;
+  var img=document.getElementById('lightboxImg');
+  var btn=document.getElementById('lightboxZoomBtn');
+  if(img){
+    img.classList.toggle('fit',mode==='fit');
+    img.classList.toggle('actual',mode==='actual');
+  }
+  if(btn)btn.textContent=(mode==='fit')?'Actual size':'Fit to screen';
+}
+function toggleLightboxZoom(){setLightboxZoom(lightboxZoom==='fit'?'actual':'fit');}
+
+// The thumbnail appears at once, deliberately blurred so it is obviously a placeholder,
+// and is replaced by the full image when it arrives.
 async function showLightboxFor(a){
   var img=document.getElementById('lightboxImg');
   if(!img)return;
-  var src=attachPreviewSrc(a);
-  img.src=src||'';
+  var nameEl=document.getElementById('lightboxName');
+  var statusEl=document.getElementById('lightboxStatus');
+  var thumb=attachPreviewSrc(a);
+  var haveFull=!!(a&&(a.fullData||a.data))||!!(a&&a.id&&attachCache[a.id]);
+
+  if(nameEl)nameEl.textContent=(a&&a.name)||'attachment';
+  setLightboxZoom('fit');
+  img.src=thumb||'';
+  img.classList.toggle('loading',!haveFull&&!!thumb);
+  if(statusEl)statusEl.textContent=haveFull?'':'Loading full image\u2026';
   document.getElementById('lightbox').classList.remove('hidden');
+
   var full=await loadAttachmentFull(a);
-  if(full)img.src=full;
-  else if(!src)showToast('That attachment could not be loaded');
+  img.classList.remove('loading');
+  if(full){
+    img.src=full;
+    if(statusEl)statusEl.textContent='';
+  }else{
+    if(statusEl)statusEl.textContent=thumb?'Only the preview could be loaded':'';
+    if(!thumb)showToast('That attachment could not be loaded');
+  }
 }
 function openLightbox(target, i) {
   const arr = target === 'modal' ? modalAttachments : richAttachments;
@@ -3678,6 +3722,7 @@ function openLightbox(target, i) {
 }
 function closeLightbox() {
   document.getElementById('lightbox').classList.add('hidden');
+  setLightboxZoom('fit');
 }
 
 // Non-image attachments no longer have their bytes to hand, so fetch then download.
@@ -3723,6 +3768,9 @@ document.addEventListener('paste', (e) => {
 // -- EVENT LISTENERS --
 // Intercept browser back button
 window.addEventListener('popstate', function(e) {
+  if (!document.getElementById('lightbox').classList.contains('hidden')) {
+    closeLightbox(); history.pushState(null,'',location.href); return;
+  }
   if (!document.getElementById('importOverlay').classList.contains('hidden')) {
     closeImport(); history.pushState(null,'',location.href); return;
   }
@@ -3751,6 +3799,8 @@ history.pushState(null,'',location.href);
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
+    // the lightbox sits above everything, so it closes first
+    if(!document.getElementById('lightbox').classList.contains('hidden')){closeLightbox();return;}
     if(!document.getElementById('importOverlay').classList.contains('hidden')){closeImport();return;}
     if(!document.getElementById('mergePreviewOverlay').classList.contains('hidden')){closeMergePreview();return;}
     if(!document.getElementById('mergePickerOverlay').classList.contains('hidden')){closeMergePicker();return;}
@@ -3802,7 +3852,15 @@ document.getElementById('newProjectInput').addEventListener('keydown',e=>{if(e.k
 </div>
 
 <div class="lightbox hidden" id="lightbox" onclick="closeLightbox()">
-  <img id="lightboxImg" src="" alt="attachment" />
+  <div class="lightbox-stage">
+    <img id="lightboxImg" class="fit" src="" alt="attachment" onclick="event.stopPropagation();toggleLightboxZoom()" />
+  </div>
+  <div class="lightbox-bar" onclick="event.stopPropagation()">
+    <span class="lightbox-name" id="lightboxName"></span>
+    <span class="lightbox-status" id="lightboxStatus"></span>
+    <button class="btn btn-ghost btn-sm" id="lightboxZoomBtn" onclick="toggleLightboxZoom()">Actual size</button>
+    <button class="btn btn-ghost btn-sm" onclick="closeLightbox()">Close</button>
+  </div>
 </div>
 </body>
 </html>

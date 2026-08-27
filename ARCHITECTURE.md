@@ -190,7 +190,7 @@ Other state: `viewMode` (`list`/`grid`/`kanban`), `detailTaskId`, `modalAttachme
 | `Ctrl/Cmd + K` | Focus the board search box (switches to Board first) |
 | `Ctrl/Cmd + Shift + K` | New task |
 | `Ctrl/Cmd + B` / `I` | Bold / italic, only while the note editor body has focus |
-| `Esc` | Closes the topmost overlay: merge preview, merge picker, then the modals |
+| `Esc` | Closes the topmost overlay: the lightbox, then import, merge, then the modals |
 
 The browser Back button is intercepted by a `popstate` handler that closes the topmost
 overlay instead of leaving the page.
@@ -311,10 +311,19 @@ Trash does **not** delete its payloads — restoring has to work. `permDelete()`
 
 **Reading.** `attachPreviewSrc()` returns `thumb || data`, so both formats render.
 `loadAttachmentFull()` resolves the full payload from `fullData`, from legacy inline `data`,
-or by fetching the document, memoised in `attachCache`. `showLightboxFor()` displays the
-thumbnail immediately and swaps in the full image when it arrives. Non-image attachments no
-longer have their bytes to hand, so the file chip is a `<button>` calling
-`downloadAttachment()` rather than an `<a href>`.
+or by fetching the document, memoised in `attachCache`. Non-image attachments no longer have
+their bytes to hand, so the file chip is a `<button>` calling `downloadAttachment()` rather
+than an `<a href>`.
+
+**The lightbox** has two modes, `fit` and `actual`, toggled by clicking the image or the
+button in its bar. `fit` scales in *both* directions — the old CSS was `max-width:90vw` with
+no `width`, so any screenshot smaller than the window opened at 1:1 and was unreadable.
+Note that `fit` is sized in viewport units, not percentages: the stage is content-sized, so
+`width:100%` would resolve against the image's own intrinsic width and change nothing. The
+stage centres with auto margins rather than `justify-content`, so a zoomed image larger than
+the stage scrolls in both directions instead of losing its top-left corner. While the full
+payload is in flight the thumbnail shows blurred with a "Loading full image" label, so a
+soft preview is never mistaken for the real thing.
 
 **Migration.** Settings → Attachment storage counts what is still inline and offers a button.
 `migrateAttachments()` walks the affected tasks, creates a document and a thumbnail per
