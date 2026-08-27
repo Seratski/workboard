@@ -96,7 +96,7 @@ the task document as base64 (see defect 5).
 | `links` | `[{name, url}]` | `https://` prefixed automatically if missing. |
 | `attachments` | `[{name, type, data, size}]` | `data` is a base64 data URL. |
 | `comments` | `[{text, time}]` | `time` is `Date.now()` ms, not a Firestore timestamp. |
-| `history` | `[{type, time}]` | `type` ∈ `created`, `edited`, `completed`, `reopened`. |
+| `history` | `[{type, time}]` | `type` ∈ `created`, `edited`, `completed`, `reopened`, `merged`. |
 | `done` | boolean | |
 | `createdAt` / `updatedAt` | serverTimestamp | `createdAt` drives the default query order. |
 
@@ -107,7 +107,8 @@ comments on the same task simultaneously will lose one of the writes.
 #### `trash/{id}` document
 
 A full copy of the task, plus `deletedAt` (serverTimestamp) and `originalId`, with the
-client-side `id` stripped. Restoring creates a **new** task document — the original ID is
+client-side `id` stripped. A copy created by a merge also carries `mergedInto` naming the
+task it was folded into. Restoring creates a **new** task document — the original ID is
 not reused, so anything pointing at the old ID (a pinned Today item, for example) will not
 follow. There is no automatic expiry; trash grows until emptied by hand.
 
@@ -212,6 +213,46 @@ only mode that includes completed tasks.
 called on exactly one element: the detail-modal comment box. `linkify()` (line 1310) renders
 `@name` as a clickable span that pushes the mention into the search box. The mention regex
 allows one or two words, so three-part names are only partly matched.
+
+### Merging two tasks
+
+`openMergePicker()` → `openMergePreview()` → `confirmMerge()`, reached from the
+🔀 Merge button in the detail-modal footer. The task whose detail modal is open is
+**A** and survives; the task picked from the list is **B** and is moved to Trash.
+
+The picker (`renderMergePicker`) lists every other task with a text search over title,
+note, richBody, sites, persons and labels, sorted by `mergePickSort`: unfinished before
+done, then newest first. A task created seconds ago still has a pending `serverTimestamp`,
+so `createdAt` is `null` client-side and Firestore's `orderBy('createdAt','desc')` sorts it
+**last** — `mergePickSort` treats `null` as newest to compensate. Capped at 400 rows.
+
+The preview (`renderMergePreview`) offers a per-field choice for `title`, `priority`,
+`date` and the note text, held in `mergeChoice`. The note field has three options: `both`
+(the default — A's text, a `--- merged ---` separator, then B's), `a`, or `b`.
+Everything else is combined without asking, in `buildMergedData`:
+
+| Field | Rule |
+|---|---|
+| `sites`, `persons`, `tags` | union, A's order preserved, deduped by value |
+| `actions` | union, deduped by `text` + `assignee`; A's copy wins on a clash |
+| `links` | union, deduped by `url` |
+| `attachments` | union, deduped by `name` + `size`; B's can be excluded via a checkbox |
+| `comments` | concatenated, then sorted by `time` ascending |
+| `history` | concatenated, sorted by `time`, then a `merged` entry appended |
+| `done` | taken from A |
+
+If the result exceeds 500 characters, or either side had a `richBody`, the text is written
+to `richBody` with `note` holding the first 500 characters — matching what
+`saveRichTask()` does.
+
+Because attachments are base64 inside the document (defect 5), merging two tasks that both
+carry images can exceed the 1 MiB limit. The preview shows the serialized size, warns above
+~880 KB, and disables the confirm button above ~977 KB rather than letting the write fail
+silently. Excluding B's attachments is the escape hatch.
+
+If B was pinned in Today focus, the pin is moved to A rather than left pointing at a
+deleted document. The trash copy of B carries `mergedInto: <A's id>` alongside the usual
+`originalId`, so a merge is distinguishable from a plain delete.
 
 ---
 

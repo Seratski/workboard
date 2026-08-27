@@ -166,6 +166,46 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .detail-attachments{display:flex;flex-wrap:wrap;gap:8px;}
 .detail-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
 
+/* MERGE */
+.merge-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:640px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;}
+.merge-head{padding:18px 20px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.merge-head-title{font-size:15px;font-weight:600;color:var(--text);}
+.merge-head-sub{font-size:12px;color:var(--text2);margin-top:5px;line-height:1.55;}
+.merge-body{overflow-y:auto;padding:16px 20px;flex:1;}
+.merge-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.merge-pick-row{display:flex;align-items:stretch;gap:9px;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;transition:all .12s;margin-bottom:5px;}
+.merge-pick-row:hover{border-color:var(--accent);background:var(--bg4);}
+.merge-pick-stripe{width:3px;border-radius:3px;flex-shrink:0;}
+.merge-pick-main{flex:1;min-width:0;}
+.merge-pick-title{font-size:13px;color:var(--text);font-weight:500;}
+.merge-pick-meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px;}
+.merge-field{border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:10px;background:var(--bg3);}
+.merge-field-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--label);margin-bottom:8px;}
+.merge-opt{display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border-radius:6px;border:1px solid transparent;cursor:pointer;transition:all .12s;}
+.merge-opt:hover{background:var(--bg4);}
+.merge-opt.on{border-color:var(--accent);background:var(--accent-glow);}
+.merge-radio{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--border3);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;}
+.merge-opt.on .merge-radio{border-color:var(--accent);}
+.merge-opt.on .merge-radio::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);}
+.merge-opt-side{font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;width:36px;margin-top:3px;}
+.merge-opt.on .merge-opt-side{color:var(--accent);}
+.merge-opt-body{flex:1;min-width:0;}
+.merge-opt-caption{font-size:10px;font-weight:600;color:var(--text3);margin-bottom:4px;}
+.merge-opt.on .merge-opt-caption{color:var(--accent);}
+.merge-default-tag{font-size:9px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;margin-left:6px;}
+.merge-opt-val{flex:1;font-size:12px;color:var(--text2);line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:110px;overflow-y:auto;}
+.merge-opt-val.empty{color:var(--text3);font-style:italic;}
+.merge-union{display:flex;flex-wrap:wrap;gap:5px;}
+.merge-union-stat{font-size:11px;font-family:var(--mono);color:var(--text2);background:var(--bg4);border-radius:6px;padding:3px 8px;}
+.merge-size{font-size:11px;font-family:var(--mono);color:var(--text3);margin-top:9px;}
+.merge-size.warn{color:var(--amber);}
+.merge-size.bad{color:var(--red);}
+.merge-note{font-size:11px;color:var(--text3);line-height:1.6;margin-top:8px;}
+.merge-check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;padding:7px 9px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);margin-top:9px;}
+.merge-check:hover{border-color:var(--border3);}
+.merge-check .check-box{width:15px;height:15px;flex-shrink:0;}
+.merge-empty{color:var(--text3);font-size:13px;padding:20px 4px;text-align:center;}
+
 /* TASK ROWS */
 .tasks{display:flex;flex-direction:column;gap:1px;}
 .task-row-wrap{display:flex;align-items:stretch;border-radius:6px;transition:background .1s;border:1px solid transparent;}
@@ -648,10 +688,42 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     <div class="detail-footer">
       <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
       <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open note</button>
+      <button class="btn btn-ghost btn-sm" id="detailMergeBtn" onclick="openMergePicker()">🔀 Merge</button>
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
       <div class="check-box" id="detailCheck" style="margin-left:auto;width:18px;height:18px;" onclick="toggleDoneFromDetail()"></div>
       <span style="font-size:12px;color:var(--text2)" id="detailDoneLabel">Mark done</span>
       <button class="btn btn-danger btn-sm" id="detailDeleteBtn" onclick="deleteFromDetail()" style="margin-left:12px;">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- MERGE: PICK THE SECOND TASK -->
+<div class="overlay hidden" id="mergePickerOverlay" onclick="if(event.target===this)closeMergePicker()">
+  <div class="merge-modal">
+    <div class="merge-head">
+      <div class="merge-head-title">&#128256; Merge task</div>
+      <div class="merge-head-sub">Keeping <strong id="mergePrimaryName" style="color:var(--label)"></strong>. Pick the task to merge into it &mdash; that one is moved to Trash.</div>
+      <input class="form-input" id="mergePickerSearch" placeholder="Search tasks&hellip;" oninput="renderMergePicker()" style="margin-top:11px;" />
+    </div>
+    <div class="merge-body" id="mergePickerList"></div>
+    <div class="merge-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closeMergePicker()" style="margin-left:auto;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- MERGE: PREVIEW AND CONFIRM -->
+<div class="overlay hidden" id="mergePreviewOverlay" onclick="if(event.target===this)closeMergePreview()">
+  <div class="merge-modal">
+    <div class="merge-head">
+      <div class="merge-head-title">&#128256; Confirm merge</div>
+      <div class="merge-head-sub" id="mergePreviewSub"></div>
+    </div>
+    <div class="merge-body" id="mergePreviewBody"></div>
+    <div class="merge-foot">
+      <button class="btn btn-ghost btn-sm" onclick="backToMergePicker()">&larr; Pick another</button>
+      <button class="btn btn-primary btn-sm" id="mergeConfirmBtn" onclick="confirmMerge()" style="margin-left:auto;">&#128256; Merge tasks</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeMergePreview()">Cancel</button>
     </div>
   </div>
 </div>
@@ -2215,7 +2287,7 @@ function openDetail(elOrId) {
   if (history.length) {
     body += '<div class="detail-section">';
     body += '<div class="detail-section-label">History</div>';
-    const histLabels = {created:'Task created',edited:'Task edited',completed:'Marked as done',reopened:'Reopened'};
+    const histLabels = {created:'Task created',edited:'Task edited',completed:'Marked as done',reopened:'Reopened',merged:'Merged with another task'};
     history.slice().reverse().forEach(function(h) {
       body += '<div class="history-item">'
         +'<div class="history-dot"></div>'
@@ -2331,6 +2403,281 @@ async function toggleDetailAction(idx) {
   openDetail(detailTaskId);
 }
 
+// -- MERGE TASKS --
+let mergeSecondaryId=null;
+let mergeChoice={title:'a',priority:'a',date:'a',text:'both',secAttach:true};
+const MERGE_SIZE_WARN=900000;   // ~880KB: getting close to the Firestore limit
+const MERGE_SIZE_BLOCK=1000000; // ~977KB: refuse, the 1MiB doc limit would reject the write
+
+function mergeBodyText(t){return (t.richBody||t.note||'');}
+function mergeUniq(a,b){
+  var out=(a||[]).slice();
+  (b||[]).forEach(function(v){if(out.indexOf(v)===-1)out.push(v);});
+  return out;
+}
+function mergeUniqBy(a,b,keyFn){
+  var out=(a||[]).slice(), seen={};
+  out.forEach(function(v){seen[keyFn(v)]=1;});
+  (b||[]).forEach(function(v){var k=keyFn(v);if(!seen[k]){seen[k]=1;out.push(v);}});
+  return out;
+}
+
+function openMergePicker(){
+  if(!detailTaskId){showToast('Open a task first');return;}
+  var p=tasks.find(function(x){return x.id===detailTaskId;});
+  if(!p)return;
+  mergeSecondaryId=null;
+  document.getElementById('mergePrimaryName').textContent=p.title||'(No title)';
+  document.getElementById('mergePickerSearch').value='';
+  renderMergePicker();
+  document.getElementById('mergePickerOverlay').classList.remove('hidden');
+  setTimeout(function(){var el=document.getElementById('mergePickerSearch');if(el)el.focus();},80);
+}
+function closeMergePicker(){document.getElementById('mergePickerOverlay').classList.add('hidden');}
+
+function renderMergePicker(){
+  var q=(document.getElementById('mergePickerSearch').value||'').toLowerCase().trim();
+  var list=tasks.filter(function(t){
+    if(t.id===detailTaskId)return false;
+    if(!q)return true;
+    var hay=[t.title||'',t.note||'',t.richBody||''].concat(t.sites||[],t.persons||[],t.tags||[]).join(' ').toLowerCase();
+    return hay.indexOf(q)!==-1;
+  });
+  var el=document.getElementById('mergePickerList');
+  if(!list.length){
+    el.innerHTML='<div class="merge-empty">'
+      +(tasks.length<2?'This is your only task \u2014 there is nothing to merge it with.'
+                      :(q?'No other task matches \u201c'+escHtml(q)+'\u201d.':'No other tasks.'))
+      +'</div>';
+    return;
+  }
+  var sc={high:'stripe-high',medium:'stripe-medium',low:'stripe-low',none:'stripe-none'};
+  var shown=mergePickSort(list).slice(0,400);
+  el.innerHTML=shown.map(function(t){
+    var tags=(t.sites||[]).map(function(x){return '<span class="itag itag-s">'+escHtml(x)+'</span>';}).join('')
+      +(t.persons||[]).map(function(x){return '<span class="itag itag-p">'+escHtml(x)+'</span>';}).join('')
+      +(t.tags||[]).map(function(x){return '<span class="itag itag-t">'+escHtml(x)+'</span>';}).join('');
+    var extra=[];
+    if(t.done)extra.push('done');
+    if((t.comments||[]).length)extra.push((t.comments||[]).length+' comments');
+    if((t.attachments||[]).length)extra.push((t.attachments||[]).length+' files');
+    var meta=tags
+      +(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'">'+formatDate(t.date)+'</span>':'')
+      +(extra.length?'<span class="merge-union-stat">'+extra.join(' \u00b7 ')+'</span>':'');
+    return '<div class="merge-pick-row" data-tid="'+t.id+'" onclick="mergePickClick(this)">'
+      +'<div class="merge-pick-stripe '+sc[t.priority||'none']+'"></div>'
+      +'<div class="merge-pick-main">'
+        +'<div class="merge-pick-title">'+escHtml(t.title||'(No title)')+'</div>'
+        +(meta?'<div class="merge-pick-meta">'+meta+'</div>':'')
+      +'</div></div>';
+  }).join('')
+  +(list.length>shown.length
+     ?'<div class="merge-note">Showing '+shown.length+' of '+list.length+' \u2014 search to narrow it down.</div>'
+     :'<div class="merge-note">'+list.length+' task'+(list.length!==1?'s':'')+' to choose from.</div>');
+}
+// Unfinished first, then newest first. A task created seconds ago still has a pending
+// serverTimestamp (createdAt === null locally), which Firestore sorts LAST in a desc
+// query -- so treat null as newest here or brand-new tasks sink to the bottom.
+function mergePickSort(list){
+  return list.slice().sort(function(x,y){
+    if((!!x.done)!==(!!y.done))return x.done?1:-1;
+    var xt=(x.createdAt&&x.createdAt.toMillis)?x.createdAt.toMillis():Infinity;
+    var yt=(y.createdAt&&y.createdAt.toMillis)?y.createdAt.toMillis():Infinity;
+    if(xt===yt)return 0;
+    if(xt===Infinity)return -1;
+    if(yt===Infinity)return 1;
+    return yt-xt;
+  });
+}
+
+function mergePickClick(el){
+  var id=el.getAttribute('data-tid');
+  if(id)openMergePreview(id);
+}
+
+function openMergePreview(id){
+  mergeSecondaryId=id;
+  mergeChoice={title:'a',priority:'a',date:'a',text:'both',secAttach:true};
+  closeMergePicker();
+  renderMergePreview();
+  document.getElementById('mergePreviewOverlay').classList.remove('hidden');
+}
+function closeMergePreview(){
+  document.getElementById('mergePreviewOverlay').classList.add('hidden');
+  mergeSecondaryId=null;
+}
+function backToMergePicker(){
+  document.getElementById('mergePreviewOverlay').classList.add('hidden');
+  openMergePicker();
+}
+function mergeSet(field,val){mergeChoice[field]=val;renderMergePreview();}
+function mergeToggleAttach(){mergeChoice.secAttach=!mergeChoice.secAttach;renderMergePreview();}
+
+const MERGE_TEXT_SEP='\n\n--- merged ---\n\n';
+
+function mergeJoinText(ta,tb){
+  return [ta,tb].filter(function(x){return x&&x.trim();}).join(MERGE_TEXT_SEP);
+}
+
+function buildMergedData(a,b,c){
+  var ta=mergeBodyText(a), tb=mergeBodyText(b), text;
+  if(c.text==='a')text=ta;
+  else if(c.text==='b')text=tb;
+  else text=mergeJoinText(ta,tb);
+  var data={
+    title:(c.title==='a'?a.title:b.title)||'',
+    priority:(c.priority==='a'?a.priority:b.priority)||'none',
+    date:(c.date==='a'?a.date:b.date)||'',
+    sites:mergeUniq(a.sites,b.sites),
+    persons:mergeUniq(a.persons,b.persons),
+    tags:mergeUniq(a.tags,b.tags),
+    actions:mergeUniqBy(a.actions,b.actions,function(x){return (x.text||'')+'|'+(x.assignee||'');}),
+    links:mergeUniqBy(a.links,b.links,function(x){return x.url||'';}),
+    attachments:c.secAttach
+      ?mergeUniqBy(a.attachments,b.attachments,function(x){return (x.name||'')+'|'+(x.size||0);})
+      :(a.attachments||[]).slice(),
+    comments:(a.comments||[]).concat(b.comments||[]).sort(function(x,y){return (x.time||0)-(y.time||0);}),
+    done:!!a.done
+  };
+  // Keep the long form in richBody so it opens in the note editor; note stays the preview.
+  if(text.length>500||a.richBody||b.richBody){data.richBody=text;data.note=text.slice(0,500);}
+  else{data.note=text;}
+  var hist=(a.history||[]).concat(b.history||[]).sort(function(x,y){return (x.time||0)-(y.time||0);});
+  hist.push({type:'merged',time:Date.now()});
+  data.history=hist;
+  return data;
+}
+
+function mergeDocSize(data){try{return JSON.stringify(data).length;}catch(e){return 0;}}
+
+function mergeOptHTML(field,side,label,val,isOn,caption){
+  var str=val===undefined||val===null?'':String(val);
+  var empty=!str.trim();
+  return '<div class="merge-opt'+(isOn?' on':'')+'" onclick="mergeSet(\''+field+'\',\''+side+'\')">'
+    +'<div class="merge-radio"></div>'
+    +'<div class="merge-opt-side">'+label+'</div>'
+    +'<div class="merge-opt-body">'
+      +(caption?'<div class="merge-opt-caption">'+caption+'</div>':'')
+      +'<div class="merge-opt-val'+(empty?' empty':'')+'">'+(empty?'(empty)':escHtml(str))+'</div>'
+    +'</div>'
+    +'</div>';
+}
+
+function renderMergePreview(){
+  var a=tasks.find(function(x){return x.id===detailTaskId;});
+  var b=tasks.find(function(x){return x.id===mergeSecondaryId;});
+  if(!a||!b){closeMergePreview();return;}
+  var pLabel={high:'\uD83D\uDD34 High',medium:'\uD83D\uDFE1 Medium',low:'\uD83D\uDFE2 Low',none:'\u2014 none \u2014'};
+
+  document.getElementById('mergePreviewSub').innerHTML=
+    '<strong style="color:var(--accent)">A</strong> '+escHtml(a.title||'(No title)')
+    +'<br><strong style="color:var(--label)">B</strong> '+escHtml(b.title||'(No title)')
+    +' \u2014 moved to Trash';
+
+  var h='';
+  h+='<div class="merge-field"><div class="merge-field-label">Title</div>'
+    +mergeOptHTML('title','a','A',a.title,mergeChoice.title==='a')
+    +mergeOptHTML('title','b','B',b.title,mergeChoice.title==='b')+'</div>';
+  h+='<div class="merge-field"><div class="merge-field-label">Priority</div>'
+    +mergeOptHTML('priority','a','A',pLabel[a.priority||'none'],mergeChoice.priority==='a')
+    +mergeOptHTML('priority','b','B',pLabel[b.priority||'none'],mergeChoice.priority==='b')+'</div>';
+  h+='<div class="merge-field"><div class="merge-field-label">Due date</div>'
+    +mergeOptHTML('date','a','A',a.date?formatDate(a.date):'',mergeChoice.date==='a')
+    +mergeOptHTML('date','b','B',b.date?formatDate(b.date):'',mergeChoice.date==='b')+'</div>';
+
+  var ta=mergeBodyText(a), tb=mergeBodyText(b);
+  h+='<div class="merge-field">'
+    +'<div class="merge-field-label">Notes'
+      +'<span class="form-hint">nothing is discarded unless you pick A or B below</span>'
+    +'</div>'
+    +mergeOptHTML('text','both','BOTH',mergeJoinText(ta,tb),mergeChoice.text==='both',
+        'Keep both notes, A first then B<span class="merge-default-tag">default</span>')
+    +mergeOptHTML('text','a','A',ta,mergeChoice.text==='a',
+        'Keep only A\u2019s note'+(tb&&tb.trim()?' \u2014 discards B\u2019s text':''))
+    +mergeOptHTML('text','b','B',tb,mergeChoice.text==='b',
+        'Keep only B\u2019s note'+(ta&&ta.trim()?' \u2014 discards A\u2019s text':''))
+    +'</div>';
+
+  var data=buildMergedData(a,b,mergeChoice);
+  var stats=[['Sites',data.sites.length],['People',data.persons.length],['Labels',data.tags.length],
+             ['Actions',data.actions.length],['Links',data.links.length],
+             ['Comments',data.comments.length],['Attachments',data.attachments.length]]
+            .filter(function(x){return x[1]>0;});
+
+  h+='<div class="merge-field"><div class="merge-field-label">Combined automatically, duplicates removed</div>'
+    +'<div class="merge-union">'
+    +(stats.length?stats.map(function(x){return '<span class="merge-union-stat">'+x[0]+' '+x[1]+'</span>';}).join('')
+                  :'<span class="merge-note" style="margin:0">Nothing to combine.</span>')
+    +'</div>';
+
+  var secAtt=(b.attachments||[]).length;
+  if(secAtt){
+    h+='<div class="merge-check" onclick="mergeToggleAttach()">'
+      +'<div class="check-box'+(mergeChoice.secAttach?' checked':'')+'"></div>'
+      +'Include the '+secAtt+' attachment'+(secAtt!==1?'s':'')+' from B'
+      +'</div>';
+  }
+
+  var size=mergeDocSize(data);
+  var cls=size>MERGE_SIZE_BLOCK?'bad':(size>MERGE_SIZE_WARN?'warn':'');
+  h+='<div class="merge-size '+cls+'">Merged document '+Math.round(size/1024)+' KB of 1024 KB max</div>';
+  if(size>MERGE_SIZE_BLOCK){
+    h+='<div class="merge-note" style="color:var(--red)">Over the Firestore 1 MiB document limit \u2014 the write would be rejected. Leave out B\u2019s attachments, or remove some attachments from either task first.</div>';
+  }else if(size>MERGE_SIZE_WARN){
+    h+='<div class="merge-note" style="color:var(--amber)">Close to the 1 MiB document limit. This merge will work, but adding more comments or attachments to the result later may start failing.</div>';
+  }
+  h+='</div>';
+
+  h+='<div class="merge-note">History from both tasks is kept in order and a \u201cMerged\u201d entry is added. B goes to Trash and can be restored from Settings \u2014 note that restoring creates a new task rather than undoing the merge.</div>';
+
+  document.getElementById('mergePreviewBody').innerHTML=h;
+  var btn=document.getElementById('mergeConfirmBtn');
+  if(btn){
+    var blocked=size>MERGE_SIZE_BLOCK;
+    btn.disabled=blocked;
+    btn.style.opacity=blocked?'0.4':'';
+    btn.style.cursor=blocked?'not-allowed':'';
+  }
+}
+
+async function confirmMerge(){
+  var a=tasks.find(function(x){return x.id===detailTaskId;});
+  var b=tasks.find(function(x){return x.id===mergeSecondaryId;});
+  if(!a||!b){showToast('Task not found');return;}
+  var data=buildMergedData(a,b,mergeChoice);
+  var size=mergeDocSize(data);
+  if(size>MERGE_SIZE_BLOCK){showToast('Too large to merge: '+Math.round(size/1024)+' KB');return;}
+  var primaryId=a.id, secId=b.id, newTitle=data.title;
+  var btn=document.getElementById('mergeConfirmBtn');
+  if(btn){btn.disabled=true;btn.textContent='Merging\u2026';}
+  try{
+    data.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection('tasks').doc(primaryId).update(data);
+    var trashData=Object.assign({},b,{
+      deletedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      originalId:secId,
+      mergedInto:primaryId
+    });
+    delete trashData.id;
+    await db.collection('trash').add(trashData);
+    await db.collection('tasks').doc(secId).delete();
+    // If B was pinned in Today, move the pin to A rather than leaving a dead entry.
+    if(todayFocus.some(function(x){return x.id===secId;})){
+      var hadPrimary=todayFocus.some(function(x){return x.id===primaryId;});
+      todayFocus=todayFocus.filter(function(x){return x.id!==secId;});
+      if(!hadPrimary)todayFocus.push({id:primaryId,title:newTitle||'(No title)',done:false});
+      await saveTodayFocus();
+    }
+    document.getElementById('mergePreviewOverlay').classList.add('hidden');
+    mergeSecondaryId=null;
+    closeDetail();
+    showToast('Tasks merged \u2713');
+  }catch(e){
+    showToast('Merge failed: '+(e.code||e.message||'unknown error'));
+  }
+  if(btn){btn.disabled=false;btn.textContent='\uD83D\uDD00 Merge tasks';}
+}
+
 // -- ATTACHMENTS --
 let modalAttachments = []; // {name, type, data (base64), size}
 let modalAutoSaveTimer = null;
@@ -2442,6 +2789,12 @@ document.addEventListener('paste', (e) => {
 // -- EVENT LISTENERS --
 // Intercept browser back button
 window.addEventListener('popstate', function(e) {
+  if (!document.getElementById('mergePreviewOverlay').classList.contains('hidden')) {
+    closeMergePreview(); history.pushState(null,'',location.href); return;
+  }
+  if (!document.getElementById('mergePickerOverlay').classList.contains('hidden')) {
+    closeMergePicker(); history.pushState(null,'',location.href); return;
+  }
   if (!document.getElementById('detailOverlay').classList.contains('hidden')) {
     closeDetail(); history.pushState(null,'',location.href); return;
   }
@@ -2460,7 +2813,11 @@ window.addEventListener('popstate', function(e) {
 history.pushState(null,'',location.href);
 
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeModal();closeDetail();}
+  if(e.key==='Escape'){
+    if(!document.getElementById('mergePreviewOverlay').classList.contains('hidden')){closeMergePreview();return;}
+    if(!document.getElementById('mergePickerOverlay').classList.contains('hidden')){closeMergePicker();return;}
+    closeModal();closeDetail();
+  }
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openModal();}
 });
 // Task modal does not close on background click to prevent accidental data loss
