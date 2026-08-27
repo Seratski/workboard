@@ -12,6 +12,11 @@
 // column). Do not commit the real UID or the owner's email address to this
 // repository — it is public.
 //
+// Anything not matched below is denied by default. That is a real trap when adding
+// a collection: the /attachments rule had to be added at the same time as the
+// attachment rework, or every attachment write would have failed with
+// permission-denied. If you add a collection, add its rule here and publish.
+//
 // Why UID and not email: request.auth.token.email also works and is easier to
 // read, but an email address can be reassigned, and the token claim is only
 // trustworthy when the provider has verified it. The UID is stable and
@@ -37,13 +42,18 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    // One document per attachment: { name, type, size, data (base64), createdAt }.
+    // Tasks reference these by id and keep only a small thumbnail themselves.
+    match /attachments/{attachmentId} {
+      allow read, write: if isOwner();
+    }
+
     // meta/sites, meta/persons, meta/projectTasks, meta/settings, meta/todayFocus
     match /meta/{docId} {
       allow read, write: if isOwner();
     }
 
-    // Anything not matched above is denied by default. Firestore rules are
-    // additive — an explicit `allow ... : if false` catch-all would not revoke
-    // the grants above, so there is deliberately none here.
+    // Firestore rules are additive — an explicit `allow ... : if false` catch-all
+    // would not revoke the grants above, so there is deliberately none here.
   }
 }

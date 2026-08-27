@@ -174,6 +174,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .detail-action-text.done{text-decoration:line-through;color:var(--text3);}
 .detail-action-assignee{font-size:10px;color:var(--text3);font-family:var(--mono);background:var(--bg4);padding:1px 6px;border-radius:8px;}
 .detail-attachments{display:flex;flex-wrap:wrap;gap:8px;}
+button.task-attach-file{font-family:var(--font);cursor:pointer;}
 .detail-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
 
 /* IMPORT */
@@ -1023,6 +1024,16 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
           shows you exactly what it will change before anything is written.
         </div>
       </div>
+      <div class="settings-card">
+        <div class="settings-card-title">Attachment storage</div>
+        <div class="settings-card-sub">Where the bytes of your attachments live.</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:9px;line-height:1.55;" id="attachStorageState"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:9px;" id="attachMigrateBtn" onclick="migrateAttachments()">Move them out of the task documents</button>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5;">
+          Each attachment gets its own document and its own 1&nbsp;MiB budget, so several
+          images on one task stop competing for the same space. Safe to run more than once.
+        </div>
+      </div>
       <div class="settings-card settings-card-full">
         <div class="settings-card-title">🗑 Trash</div>
         <div class="settings-card-sub">Recently deleted tasks. Restore or permanently delete.</div>
@@ -1547,10 +1558,11 @@ function attachHTML(t) {
   if (!atts.length) return '';
   return '<div class="task-attachments">'
     + atts.map((a, i) => {
-      if (a.type && a.type.startsWith('image/')) {
-        return '<img class="task-attach-img" src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="showTaskAttachLightbox(\'' + t.id + '\',' + i + ')" />';
+      if (isImageAttach(a)) {
+        var src=attachPreviewSrc(a);
+        return '<img class="task-attach-img" src="' + src + '" alt="' + escHtml(a.name) + '" onclick="showTaskAttachLightbox(\'' + t.id + '\',' + i + ')" />';
       }
-      return '<a class="task-attach-file" href="' + a.data + '" download="' + escHtml(a.name) + '">📄 ' + escHtml(a.name) + '</a>';
+      return '<button class="task-attach-file" onclick="event.stopPropagation();downloadAttachment(\'' + t.id + '\',' + i + ')">\uD83D\uDCC4 ' + escHtml(a.name) + '</button>';
     }).join('')
     + '</div>';
 }
@@ -1559,8 +1571,7 @@ function showTaskAttachLightbox(taskId, i) {
   if (!t) return;
   const a = (t.attachments || [])[i];
   if (!a) return;
-  document.getElementById('lightboxImg').src = a.data;
-  document.getElementById('lightbox').classList.remove('hidden');
+  showLightboxFor(a);
 }
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 // Values interpolated into an inline handler sit inside BOTH a JS string and an HTML
@@ -1856,12 +1867,14 @@ function closeModal(){
   document.getElementById('fPriority').value='none';
   document.getElementById('fDate').value='';
   fSites=[];fPersons=[];fProjects=[];fActions=[];fLinks=[];modalAttachments=[];
+  if(editingId!=='saved')discardAttachDeletes();
   document.getElementById('taskOverlay').classList.add('hidden');
   editingId=null;
 }
 async function saveTask(){
   const title=document.getElementById('fTitle').value.trim();if(!title){document.getElementById('fTitle').focus();return;}
-  const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),links:JSON.parse(JSON.stringify(fLinks)),attachments:JSON.parse(JSON.stringify(modalAttachments)),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  await persistAttachments(modalAttachments);
+  const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),links:JSON.parse(JSON.stringify(fLinks)),attachments:attachForTask(modalAttachments),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
   const newPTs=fProjects.filter(p=>!projectTasks.includes(p));
   if(newPTs.length)await db.collection('meta').doc('projectTasks').set({list:[...projectTasks,...newPTs]});
   if(editingId){
@@ -1877,6 +1890,7 @@ async function saveTask(){
   await db.collection('tasks').add(data);showToast('Saved ✓');
 }
   try{localStorage.removeItem('wb_task_draft');}catch(e){}
+  await flushAttachDeletes();
   editingId='saved'; // prevents closeModal from re-saving draft
   closeModal();
 }
@@ -2041,7 +2055,7 @@ function richSnapshot(){
     sites:rSites.slice(),persons:rPersons.slice(),tags:rProjects.slice(),
     actions:JSON.parse(JSON.stringify(rActions)),
     links:JSON.parse(JSON.stringify(rLinks)),
-    attachments:JSON.parse(JSON.stringify(richAttachments))
+    attachments:richAttachments   // live reference: persistAttachments stamps ids onto it
   };
 }
 
@@ -2060,13 +2074,14 @@ async function richFlush(){
   clearTimeout(richAutoSaveTimer);
   if(!richDirty)return;
   var snap=richSnapshot();
+  await persistAttachments(richAttachments);
   if(richEditingId){
     var data={
       richBody:snap.bodyHtml,richHtml:true,
       note:richPlainText(snap.bodyHtml).substring(0,500),
       priority:snap.priority,date:snap.date,
       sites:snap.sites,persons:snap.persons,tags:snap.tags,
-      actions:snap.actions,links:snap.links,attachments:snap.attachments,
+      actions:snap.actions,links:snap.links,attachments:attachForTask(snap.attachments),
       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
     };
     // Never blank an existing title just because the field is empty mid-retype.
@@ -2106,6 +2121,7 @@ async function saveRichTask(){
   richDirty=false; // an explicit save supersedes any pending autosave
   const newPTs=rProjects.filter(p=>!projectTasks.includes(p));
   if(newPTs.length)await db.collection('meta').doc('projectTasks').set({list:[...projectTasks,...newPTs]});
+  await persistAttachments(richAttachments);
   const bodyHtml=sanitizeRichBody(document.getElementById('richBody').innerHTML||'');
   const data={
     title,
@@ -2117,7 +2133,7 @@ async function saveRichTask(){
     sites:[...rSites],persons:[...rPersons],tags:[...rProjects],
     actions:JSON.parse(JSON.stringify(rActions)),
     links:JSON.parse(JSON.stringify(rLinks)),
-    attachments:JSON.parse(JSON.stringify(richAttachments)),
+    attachments:attachForTask(richAttachments),
     done:false,
     updatedAt:firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -2135,11 +2151,13 @@ async function saveRichTask(){
     clearRichDraft();
     showToast('Task saved to Board \u2713');
   }
+  await flushAttachDeletes();
   closeRichEditor();
 }
 function deleteRichDraft(){
   if(richEditingId){if(!confirm('Delete this task?'))return;db.collection('tasks').doc(richEditingId).delete();showToast('Deleted');}
   else{clearRichDraft();showToast('Draft discarded');}
+  discardAttachDeletes();
   clearTimeout(richAutoSaveTimer);
   richDirty=false;
   closeRichEditor();
@@ -2365,16 +2383,22 @@ async function restoreTask(trashId){
 
 async function permDelete(trashId){
   if(!confirm('Permanently delete? This cannot be undone.'))return;
+  var item=trashItems.find(function(x){return x.id===trashId;});
   await db.collection('trash').doc(trashId).delete();
+  // Only now are the attachment documents unreachable: a task sitting in Trash still
+  // references them, and restoring it has to work.
+  if(item)await deleteAttachmentsOf(item);
   showToast('Permanently deleted');
 }
 
 async function emptyTrash(){
   if(!trashItems.length){showToast('Trash is already empty');return;}
   if(!confirm('Permanently delete all '+trashItems.length+' items in trash?'))return;
+  const doomed=trashItems.slice();
   const batch=db.batch();
-  trashItems.forEach(t=>batch.delete(db.collection('trash').doc(t.id)));
+  doomed.forEach(t=>batch.delete(db.collection('trash').doc(t.id)));
   await batch.commit();
+  for(var i=0;i<doomed.length;i++)await deleteAttachmentsOf(doomed[i]);
   showToast('Trash emptied');
 }
 
@@ -2420,10 +2444,106 @@ async function clearDefaultLabel(){
   renderDefaultLabelSelect();
   showToast('Default label cleared ✓');
 }
+function countLegacyAttachments(){
+  var legacy=0, moved=0;
+  tasks.forEach(function(t){
+    (t.attachments||[]).forEach(function(a){
+      if(!a)return;
+      if(a.id)moved++;
+      else if(a.data)legacy++;
+    });
+  });
+  return {legacy:legacy,moved:moved};
+}
+
+function renderAttachStorageState(){
+  var el=document.getElementById('attachStorageState');
+  if(!el)return;
+  var c=countLegacyAttachments();
+  var btn=document.getElementById('attachMigrateBtn');
+  if(!c.legacy&&!c.moved){
+    el.innerHTML='No attachments yet. New ones are stored separately automatically.';
+    if(btn)btn.style.display='none';
+    return;
+  }
+  if(!c.legacy){
+    el.innerHTML='<span style="color:var(--green)">All '+c.moved+' attachment'+(c.moved!==1?'s':'')
+      +' already stored separately.</span>';
+    if(btn)btn.style.display='none';
+    return;
+  }
+  el.innerHTML='<span style="color:var(--amber)">'+c.legacy+' attachment'+(c.legacy!==1?'s':'')
+    +' still stored inside their task documents'+(c.moved?', '+c.moved+' already moved':'')+'.</span>';
+  if(btn)btn.style.display='';
+}
+
+// Rewrites one task at a time: create a document per inline attachment, generate a
+// thumbnail, then replace the task's array. Idempotent -- entries that already have an id
+// are left alone, so a failed or interrupted run can simply be repeated.
+async function migrateAttachments(){
+  var targets=tasks.filter(function(t){
+    return (t.attachments||[]).some(function(a){return a&&!a.id&&a.data;});
+  });
+  if(!targets.length){showToast('Nothing left to move');renderAttachStorageState();return;}
+  var c=countLegacyAttachments();
+  if(!confirm('Move '+c.legacy+' attachment'+(c.legacy!==1?'s':'')+' out of '+targets.length
+      +' task'+(targets.length!==1?'s':'')+'?\n\nThe task documents shrink and nothing is deleted.'))return;
+
+  var btn=document.getElementById('attachMigrateBtn');
+  var el=document.getElementById('attachStorageState');
+  if(btn)btn.disabled=true;
+  var movedOk=0, failed=[];
+
+  for(var i=0;i<targets.length;i++){
+    var t=targets[i];
+    if(el)el.innerHTML='<span class="imp-progress">Task '+(i+1)+'/'+targets.length+'\u2026</span>';
+    var next=[], taskFailed=false;
+    for(var k=0;k<(t.attachments||[]).length;k++){
+      var a=t.attachments[k];
+      if(!a){continue;}
+      if(a.id||!a.data){next.push(a);continue;}   // already moved, or nothing to move
+      try{
+        var thumb=await makeThumb(a.data,a.type);
+        var ref=await db.collection('attachments').add({
+          name:a.name||'',type:a.type||'',size:a.size||0,
+          data:a.data,
+          createdAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+        attachCache[ref.id]=a.data;
+        next.push({id:ref.id,name:a.name||'',type:a.type||'',size:a.size||0,thumb:thumb||''});
+        movedOk++;
+      }catch(e){
+        // Keep the inline copy so nothing is lost, and report it.
+        next.push(a);
+        taskFailed=true;
+        failed.push((t.title||'(untitled)')+' \u2014 '+(a.name||'file')+': '+(e.code||e.message||'error'));
+      }
+    }
+    if(!taskFailed||next.some(function(x){return x.id;})){
+      try{
+        await db.collection('tasks').doc(t.id).update({attachments:next});
+      }catch(e){
+        failed.push((t.title||'(untitled)')+' \u2014 task could not be updated: '+(e.code||e.message||'error'));
+      }
+    }
+  }
+
+  if(btn)btn.disabled=false;
+  renderAttachStorageState();
+  if(failed.length){
+    showToast(movedOk+' moved, '+failed.length+' failed \u2014 see the list below');
+    if(el)el.innerHTML+='<div class="imp-fail">'+failed.slice(0,5).map(escHtml).join('</div><div class="imp-fail">')+'</div>'
+      +(failed.length>5?'<div class="imp-fail">\u2026and '+(failed.length-5)+' more</div>':'');
+  }else{
+    showToast(movedOk+' attachment'+(movedOk!==1?'s':'')+' moved \u2713');
+  }
+}
+
 function renderSettingsLists(){
   document.getElementById('siteSettingsList').innerHTML=sites.map((s,i)=>'<div class="settings-item"><span class="settings-item-name">'+s+'</span><button class="btn btn-ghost btn-sm" onclick="removeSite('+i+')">Remove</button></div>').join('');
   document.getElementById('personSettingsList').innerHTML=persons.map((p,i)=>'<div class="settings-item"><span class="settings-item-name">'+p+'</span><button class="btn btn-ghost btn-sm" onclick="removePerson('+i+')">Remove</button></div>').join('');
   document.getElementById('projectSettingsList').innerHTML=projectTasks.map((p,i)=>'<div class="settings-item"><span class="settings-item-name">'+p+'</span><button class="btn btn-ghost btn-sm" onclick="removeProjectTask('+i+')">Remove</button></div>').join('');
+  renderAttachStorageState();
 }
 async function addSite(){const v=document.getElementById('newSiteInput').value.trim();if(!v||sites.includes(v))return;sites.push(v);document.getElementById('newSiteInput').value='';await db.collection('meta').doc('sites').set({list:sites});renderSettingsLists();}
 async function removeSite(i){sites.splice(i,1);await db.collection('meta').doc('sites').set({list:sites});renderSettingsLists();renderFilterPanel();}
@@ -2435,7 +2555,7 @@ async function removeProjectTask(i){projectTasks.splice(i,1);await db.collection
 // -- BACKUP: EXPORT / IMPORT --
 // v1 envelope. The pre-v1 export was a flat {tasks,sites,persons,projectTasks} object with
 // no trash, Today list or defaults; normalizeBackup still accepts those files.
-const WB_BACKUP_VERSION=1;
+const WB_BACKUP_VERSION=2;
 
 async function exportData(){
   var trashDocs=[], trashNote='';
@@ -2445,11 +2565,19 @@ async function exportData(){
     var snap=await db.collection('trash').get();
     trashDocs=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
   }catch(e){ trashNote=' (trash could not be read)'; }
+  var attachDocs=[], attachNote='';
+  try{
+    // Attachment payloads live in their own collection now, so a self-contained backup has
+    // to include them.
+    var asnap=await db.collection('attachments').get();
+    attachDocs=asnap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+  }catch(e){ attachNote=' (attachments could not be read)'; }
   var payload={
     workboard:WB_BACKUP_VERSION,
     exportedAt:new Date().toISOString(),
     tasks:tasks,
     trash:trashDocs,
+    attachments:attachDocs,
     meta:{
       sites:sites, persons:persons, projectTasks:projectTasks,
       settings:{defaultLabel:defaultLabel, defaultPerson:defaultPerson},
@@ -2460,18 +2588,19 @@ async function exportData(){
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(payload,null,2));
   a.download='workboard-backup-'+todayStr()+'.json';
   a.click();
-  showToast('Exported '+tasks.length+' task'+(tasks.length!==1?'s':'')+trashNote+' \u2713');
+  showToast('Exported '+tasks.length+' task'+(tasks.length!==1?'s':'')+trashNote+attachNote+' \u2713');
 }
 
 function normalizeBackup(raw){
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('The file is not a JSON object.');
   if(!Array.isArray(raw.tasks))throw new Error('No "tasks" array in the file \u2014 this does not look like a WorkBoard backup.');
-  var out={version:0,exportedAt:'',tasks:[],trash:[],sites:[],persons:[],projectTasks:[],settings:{},todayFocus:[]};
+  var out={version:0,exportedAt:'',tasks:[],trash:[],attachments:[],sites:[],persons:[],projectTasks:[],settings:{},todayFocus:[]};
   out.tasks=raw.tasks.filter(function(t){return t&&typeof t==='object'&&!Array.isArray(t);});
   if(raw.workboard){
     out.version=raw.workboard;
     out.exportedAt=raw.exportedAt||'';
     out.trash=Array.isArray(raw.trash)?raw.trash.filter(function(t){return t&&typeof t==='object';}):[];
+    out.attachments=Array.isArray(raw.attachments)?raw.attachments.filter(function(a){return a&&typeof a==='object'&&a.id;}):[];
     var m=raw.meta||{};
     out.sites=Array.isArray(m.sites)?m.sites:[];
     out.persons=Array.isArray(m.persons)?m.persons:[];
@@ -2528,6 +2657,7 @@ function backupPreview(b,mode){
     personsNew:b.persons.filter(function(x){return persons.indexOf(x)===-1;}).length,
     labelsNew:b.projectTasks.filter(function(x){return projectTasks.indexOf(x)===-1;}).length,
     trashInFile:b.trash.length,
+    attachInFile:b.attachments.length,
     todayInFile:b.todayFocus.length
   };
 }
@@ -2611,6 +2741,7 @@ function renderImportPreview(){
   h+='<div class="merge-field"><div class="merge-field-label">In the file</div>'
     +impRow(b.tasks.length,'','task'+(b.tasks.length!==1?'s':''))
     +impRow(b.trash.length,'','item'+(b.trash.length!==1?'s':'')+' in trash')
+    +impRow(b.attachments.length,'','stored attachment'+(b.attachments.length!==1?'s':''))
     +impRow(b.sites.length,'','site'+(b.sites.length!==1?'s':''))
     +impRow(b.persons.length,'','person'+(b.persons.length!==1?'s':''))
     +impRow(b.projectTasks.length,'','label'+(b.projectTasks.length!==1?'s':''))
@@ -2718,7 +2849,32 @@ async function runImport(mode){
       }
     }
 
-    // 3. lists
+    // 3. attachment payloads, in both modes: a task added without its payload would render
+    //    an attachment that cannot be opened. Written by id, so re-running is harmless.
+    if(b.attachments.length){
+      var wanted=b.attachments;
+      if(mode==='merge'){
+        var referenced={};
+        b.tasks.forEach(function(t){
+          (t.attachments||[]).forEach(function(a){if(a&&a.id)referenced[a.id]=true;});
+        });
+        wanted=b.attachments.filter(function(a){return referenced[a.id];});
+      }
+      if(wanted.length){
+        var at=await runChunked(wanted,function(a){
+          var o={};
+          for(var k in a){if(k!=='id')o[k]=a[k];}
+          var ct=reviveTs(a.createdAt);
+          o.createdAt=ct||firebase.firestore.FieldValue.serverTimestamp();
+          return db.collection('attachments').doc(a.id).set(o);
+        },progress('Writing attachments'));
+        failures=failures.concat(at.failures);
+        lines.push(at.okCount+' attachment'+(at.okCount!==1?'s':'')+' written');
+        report();
+      }
+    }
+
+    // 4. lists
     var nextSites = mode==='replace' ? b.sites.slice() : mergeUniq(sites,b.sites);
     var nextPersons = mode==='replace' ? b.persons.slice() : mergeUniq(persons,b.persons);
     var nextLabels = mode==='replace' ? b.projectTasks.slice() : mergeUniq(projectTasks,b.projectTasks);
@@ -2728,7 +2884,7 @@ async function runImport(mode){
     lines.push('Sites, people and labels updated');
     report();
 
-    // 4. defaults, Today list and trash: replace mode only, or when currently empty
+    // 5. defaults, Today list and trash: replace mode only, or when currently empty
     if(mode==='replace'){
       await db.collection('meta').doc('settings').set({
         defaultLabel:b.settings.defaultLabel||'',
@@ -2849,10 +3005,10 @@ function openDetail(elOrId) {
     body += '<div class="detail-section-label">Attachments ('+atts.length+')</div>';
     body += '<div class="detail-attachments">';
     atts.forEach((a, i) => {
-      if (a.type && a.type.startsWith('image/')) {
-        body += '<img class="task-attach-img" src="'+a.data+'" alt="'+escHtml(a.name)+'" onclick="showTaskAttachLightbox(\''+id+'\','+i+')" style="width:80px;height:60px;">';
+      if (isImageAttach(a)) {
+        body += '<img class="task-attach-img" src="'+attachPreviewSrc(a)+'" alt="'+escHtml(a.name)+'" onclick="showTaskAttachLightbox(\''+id+'\','+i+')" style="width:80px;height:60px;">';
       } else {
-        body += '<a class="task-attach-file" href="'+a.data+'" download="'+escHtml(a.name)+'">📄 '+escHtml(a.name)+'</a>';
+        body += '<button class="task-attach-file" onclick="downloadAttachment(\''+id+'\','+i+')">\uD83D\uDCC4 '+escHtml(a.name)+'</button>';
       }
     });
     body += '</div></div>';
@@ -3301,10 +3457,131 @@ async function confirmMerge(){
 }
 
 // -- ATTACHMENTS --
-let modalAttachments = []; // {name, type, data (base64), size}
+// Attachment payloads live in their own documents, one per file, so a task document never
+// carries base64 image data and can hold as many attachments as you like. The task keeps
+// only metadata plus a small thumbnail:
+//
+//   attachments/{autoId}  { name, type, size, data (base64 dataURL), createdAt }
+//   task.attachments[]    { id, name, type, size, thumb }
+//
+// Entries written before August 2026 hold { name, type, size, data } inline instead. Every
+// read path accepts both; the Settings page has a one-off migration for the old ones.
+let modalAttachments = [];  // in the editor: { name, type, size, thumb, fullData?, id? }
 let richAttachments = [];
+let pendingAttachDeletes = [];   // ids to remove once the task actually saves
+const attachCache = {};          // id -> full dataURL, so the lightbox fetches once
 
-const MAX_FILE_SIZE = 500 * 1024; // 500KB
+// A single attachment document has the whole 1MiB budget to itself. Base64 costs 4/3, and
+// metadata takes a little, so ~700KB of file is the safe ceiling.
+const MAX_FILE_SIZE = 700 * 1024;
+const THUMB_MAX_PX = 220;
+
+function readFileAsDataUrl(file){
+  return new Promise(function(resolve,reject){
+    var r=new FileReader();
+    r.onload=function(e){resolve(e.target.result);};
+    r.onerror=function(){reject(new Error('could not be read'));};
+    r.readAsDataURL(file);
+  });
+}
+
+// Downscaled JPEG preview, a few KB, stored on the task so the board renders without
+// fetching anything. Transparency is flattened onto the card background rather than black.
+function makeThumb(dataUrl,type){
+  return new Promise(function(resolve){
+    if(!dataUrl||!type||type.indexOf('image/')!==0)return resolve('');
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var scale=Math.min(1,THUMB_MAX_PX/Math.max(img.width,img.height));
+        var cw=Math.max(1,Math.round(img.width*scale));
+        var ch=Math.max(1,Math.round(img.height*scale));
+        var c=document.createElement('canvas');
+        c.width=cw;c.height=ch;
+        var ctx=c.getContext('2d');
+        ctx.fillStyle='#252525';
+        ctx.fillRect(0,0,cw,ch);
+        ctx.drawImage(img,0,0,cw,ch);
+        resolve(c.toDataURL('image/jpeg',0.7));
+      }catch(e){resolve('');}
+    };
+    img.onerror=function(){resolve('');};
+    img.src=dataUrl;
+  });
+}
+
+function attachPreviewSrc(a){return (a&&(a.thumb||a.data))||'';}
+function isImageAttach(a){return !!(a&&a.type&&a.type.indexOf('image/')===0);}
+
+// Create a document for anything still held in memory. Idempotent: entries that already
+// have an id, or that are legacy inline entries, are left alone.
+async function persistAttachments(arr){
+  for(var i=0;i<(arr||[]).length;i++){
+    var a=arr[i];
+    if(!a||a.id||!a.fullData||a._saving)continue;
+    a._saving=true;
+    try{
+      var ref=await db.collection('attachments').add({
+        name:a.name||'',type:a.type||'',size:a.size||0,
+        data:a.fullData,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      a.id=ref.id;
+      attachCache[ref.id]=a.fullData;
+      delete a.fullData;
+    }catch(e){
+      showToast('Attachment "'+(a.name||'file')+'" not saved: '+(e.code||e.message||'error'));
+    }finally{
+      delete a._saving;
+    }
+  }
+  return arr;
+}
+
+// What actually goes into the task document. Anything that failed to persist is dropped
+// rather than written back as inline base64.
+function attachForTask(arr){
+  return (arr||[]).filter(function(a){return a&&(a.id||a.data);}).map(function(a){
+    if(a.id)return {id:a.id,name:a.name||'',type:a.type||'',size:a.size||0,thumb:a.thumb||''};
+    return {name:a.name||'',type:a.type||'',size:a.size||0,data:a.data};
+  });
+}
+
+async function loadAttachmentFull(a){
+  if(!a)return '';
+  if(a.fullData)return a.fullData;
+  if(a.data)return a.data;                 // legacy inline entry
+  if(!a.id)return '';
+  if(attachCache[a.id])return attachCache[a.id];
+  try{
+    var doc=await db.collection('attachments').doc(a.id).get();
+    var d=doc.exists?(doc.data().data||''):'';
+    if(d)attachCache[a.id]=d;
+    return d;
+  }catch(e){return '';}
+}
+
+async function flushAttachDeletes(){
+  if(!pendingAttachDeletes.length)return;
+  var ids=pendingAttachDeletes.slice();
+  pendingAttachDeletes=[];
+  await runChunked(ids,function(id){
+    delete attachCache[id];
+    return db.collection('attachments').doc(id).delete();
+  });
+}
+function discardAttachDeletes(){pendingAttachDeletes=[];}
+
+// Removing every attachment document a set of tasks points at. Used on permanent delete,
+// where the task itself is going away for good.
+async function deleteAttachmentsOf(taskLike){
+  var ids=((taskLike&&taskLike.attachments)||[]).map(function(a){return a&&a.id;}).filter(Boolean);
+  if(!ids.length)return;
+  await runChunked(ids,function(id){
+    delete attachCache[id];
+    return db.collection('attachments').doc(id).delete();
+  });
+}
 
 function handleDragOver(e, zoneId) {
   e.preventDefault();
@@ -3323,37 +3600,46 @@ function handleFileInput(e, target) {
   processFiles(Array.from(e.target.files), target);
   e.target.value = '';
 }
-function processFiles(files, target) {
-  const arr = target === 'modal' ? modalAttachments : richAttachments;
-  const previewId = target === 'modal' ? 'modalAttachPreview' : 'richAttachPreview';
-  let errors = [];
-  files.forEach(file => {
-    if (file.size > MAX_FILE_SIZE) { errors.push(file.name + ' is too large (max 500KB)'); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      arr.push({ name: file.name, type: file.type, data: e.target.result, size: file.size });
+
+async function processFiles(files, target){
+  var arr = target==='modal'?modalAttachments:richAttachments;
+  var errors=[];
+  for(var i=0;i<files.length;i++){
+    var file=files[i];
+    if(file.size>MAX_FILE_SIZE){
+      errors.push(file.name+' is too large (max '+Math.round(MAX_FILE_SIZE/1024)+'KB)');
+      continue;
+    }
+    try{
+      var dataUrl=await readFileAsDataUrl(file);
+      var thumb=await makeThumb(dataUrl,file.type);
+      arr.push({name:file.name,type:file.type,size:file.size,thumb:thumb,fullData:dataUrl});
       renderAttachPreview(target);
-    };
-    reader.readAsDataURL(file);
-  });
-  if (errors.length) showToast(errors[0]);
+    }catch(e){
+      errors.push(file.name+' could not be read');
+    }
+  }
+  if(errors.length)showToast(errors[0]);
 }
+
 function renderAttachPreview(target) {
   const arr = target === 'modal' ? modalAttachments : richAttachments;
   const el = document.getElementById(target === 'modal' ? 'modalAttachPreview' : 'richAttachPreview');
   if (!el) return;
   el.innerHTML = arr.map(function(a, idx) {
-    if (a.type && a.type.startsWith('image/')) {
+    if (isImageAttach(a)) {
+      var src=attachPreviewSrc(a);
       return '<div class="attach-thumb">'
-        + '<img src="' + a.data + '" alt="' + escHtml(a.name) + '" data-target="' + target + '" data-idx="' + idx + '" onclick="attachImgClick(this)" style="width:70px;height:52px;object-fit:cover;border-radius:5px;cursor:pointer;" />'
-        + '<button class="attach-del" data-target="' + target + '" data-idx="' + idx + '" onclick="attachDelClick(this)">✕</button>'
-        + '</div>';
-    } else {
-      return '<div class="attach-thumb is-file">'
-        + '📄 <span class="attach-name">' + escHtml(a.name) + '</span>'
-        + '<button class="attach-del" data-target="' + target + '" data-idx="' + idx + '" onclick="attachDelClick(this)">✕</button>'
+        + (src
+            ? '<img src="' + src + '" alt="' + escHtml(a.name) + '" data-target="' + target + '" data-idx="' + idx + '" onclick="attachImgClick(this)" style="width:70px;height:52px;object-fit:cover;border-radius:5px;cursor:pointer;" />'
+            : '<span class="attach-name" style="width:70px;height:52px;display:flex;align-items:center;justify-content:center;">\uD83D\uDDBC</span>')
+        + '<button class="attach-del" data-target="' + target + '" data-idx="' + idx + '" onclick="attachDelClick(this)">\u2715</button>'
         + '</div>';
     }
+    return '<div class="attach-thumb is-file">'
+      + '\uD83D\uDCC4 <span class="attach-name">' + escHtml(a.name) + '</span>'
+      + '<button class="attach-del" data-target="' + target + '" data-idx="' + idx + '" onclick="attachDelClick(this)">\u2715</button>'
+      + '</div>';
   }).join('');
 }
 function attachImgClick(el){
@@ -3367,17 +3653,44 @@ function attachDelClick(el){
   removeAttach(target,idx);
 }
 function removeAttach(target, i) {
-  if (target === 'modal') modalAttachments.splice(i, 1);
-  else richAttachments.splice(i, 1);
+  var arr = target==='modal'?modalAttachments:richAttachments;
+  var a=arr[i];
+  // Queue the document for deletion rather than deleting now: the edit may still be cancelled.
+  if(a&&a.id)pendingAttachDeletes.push(a.id);
+  arr.splice(i,1);
   renderAttachPreview(target);
+}
+
+// Show the thumbnail immediately, then swap in the full image once it arrives.
+async function showLightboxFor(a){
+  var img=document.getElementById('lightboxImg');
+  if(!img)return;
+  var src=attachPreviewSrc(a);
+  img.src=src||'';
+  document.getElementById('lightbox').classList.remove('hidden');
+  var full=await loadAttachmentFull(a);
+  if(full)img.src=full;
+  else if(!src)showToast('That attachment could not be loaded');
 }
 function openLightbox(target, i) {
   const arr = target === 'modal' ? modalAttachments : richAttachments;
-  document.getElementById('lightboxImg').src = arr[i].data;
-  document.getElementById('lightbox').classList.remove('hidden');
+  showLightboxFor(arr[i]);
 }
 function closeLightbox() {
   document.getElementById('lightbox').classList.add('hidden');
+}
+
+// Non-image attachments no longer have their bytes to hand, so fetch then download.
+async function downloadAttachment(taskId,i){
+  var t=tasks.find(function(x){return x.id===taskId;});
+  var a=t&&(t.attachments||[])[i];
+  if(!a){showToast('Attachment not found');return;}
+  var full=await loadAttachmentFull(a);
+  if(!full){showToast('That file could not be loaded');return;}
+  var link=document.createElement('a');
+  link.href=full;
+  link.download=a.name||'attachment';
+  link.click();
 }
 
 // Paste handler — works when modal or rich editor is open
@@ -3393,15 +3706,16 @@ document.addEventListener('paste', (e) => {
       e.preventDefault();
       const file = item.getAsFile();
       if (!file) return;
-      if (file.size > MAX_FILE_SIZE) { showToast('Image too large (max 500KB)'); return; }
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const arr = target === 'modal' ? modalAttachments : richAttachments;
-        arr.push({ name: 'screenshot-' + Date.now() + '.png', type: 'image/png', data: ev.target.result, size: file.size });
-        renderAttachPreview(target);
-        showToast('Screenshot pasted ✓');
-      };
-      reader.readAsDataURL(file);
+      if (file.size > MAX_FILE_SIZE) { showToast('Image too large (max '+Math.round(MAX_FILE_SIZE/1024)+'KB)'); return; }
+      readFileAsDataUrl(file).then(function(dataUrl){
+        return makeThumb(dataUrl,'image/png').then(function(thumb){
+          var arr = target === 'modal' ? modalAttachments : richAttachments;
+          arr.push({ name:'screenshot-'+Date.now()+'.png', type:'image/png', size:file.size,
+                     thumb:thumb, fullData:dataUrl });
+          renderAttachPreview(target);
+          showToast('Screenshot pasted \u2713');
+        });
+      }).catch(function(){showToast('That screenshot could not be read');});
     }
   });
 });

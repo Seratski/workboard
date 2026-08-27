@@ -2,7 +2,7 @@
 
 Reference for anyone (human or AI assistant) about to change this codebase. Line numbers
 drift with every change and are only rough signposts — the section names and function names
-are the stable landmarks. As of 27 August 2026 `index.html` is 3,493 lines.
+are the stable landmarks. As of 27 August 2026 `index.html` is 3,807 lines.
 
 Several things in this app do not do what their names suggest. Those are called out in
 **[Known defects and constraints](#5-known-defects-and-constraints)** — read that section
@@ -19,11 +19,11 @@ string-concatenating HTML and assigning `innerHTML`; all event handling is inlin
 
 ```
 index.html
-├── <head>                     CDN script tags
-├── <style>        … 607        all CSS, organised by /* SECTION */ comments
-├── markup        609– 1058     login, modals, app shell, the five pages
-├── <script>     1059– 3475     Firebase init, global state, application JavaScript
-└── trailing markup   … 3493    mobile filter overlay + lightbox (after </script>)
+├── <head>                      CDN script tags
+├── <style>                     all CSS, organised by /* SECTION */ comments
+├── markup                      login, modals, app shell, the five pages
+├── <script>                    Firebase init, global state, application JavaScript
+└── trailing markup             mobile filter overlay + lightbox (after </script>)
 ```
 
 Note the last block: two pieces of markup sit **after** the closing `</script>` tag. Code
@@ -69,6 +69,7 @@ does nothing on GitHub Pages. Old local clones may still have it lying around un
 ```
 tasks/{autoId}          one document per task
 trash/{autoId}          soft-deleted tasks
+attachments/{autoId}    one document per attachment payload
 meta/sites              { list: string[] }
 meta/persons            { list: string[] }
 meta/projectTasks       { list: string[] }   ← the UI calls these "Labels"
@@ -76,8 +77,15 @@ meta/settings           { defaultLabel: string, defaultPerson: string }
 meta/todayFocus         { items: [{id, title, done}] }
 ```
 
-`storageBucket` is configured but **Firebase Storage is never used**. Attachments go into
-the task document as base64 (see *Attachments and the document limit*).
+`storageBucket` is configured but **Firebase Storage is never used**, and cannot be: it
+requires the Blaze plan for projects created after September 2024, and this project's
+`*.firebasestorage.app` bucket name marks it as one of those. Attachment payloads live in
+their own Firestore documents instead — see *Attachments*.
+
+**Adding a collection means adding a rule.** Firestore denies anything no rule matches, so
+`firestore.rules` and the code have to change together. The `/attachments` rule was part of
+the same change as the collection; without it every attachment write returns
+`permission-denied`.
 
 #### `tasks/{id}` document
 
@@ -94,7 +102,7 @@ the task document as base64 (see *Attachments and the document limit*).
 | `tags` | string[] | **Labels are stored under `tags`.** The UI says "Labels", the settings doc says `projectTasks`, the task field says `tags`. Three names, one concept. |
 | `actions` | `[{text, assignee, done}]` | Checklist. `assignee` is a plain name string. |
 | `links` | `[{name, url}]` | `https://` prefixed automatically if missing. |
-| `attachments` | `[{name, type, data, size}]` | `data` is a base64 data URL. |
+| `attachments` | `[{id, name, type, size, thumb}]` | References into `attachments/{id}`, plus a small JPEG thumbnail so the board renders without extra reads. Entries written before August 2026 instead hold `{name, type, size, data}` with the full base64 inline; both forms are read correctly. |
 | `comments` | `[{text, time}]` | `time` is `Date.now()` ms, not a Firestore timestamp. |
 | `history` | `[{type, time}]` | `type` ∈ `created`, `edited`, `completed`, `reopened`, `merged`. |
 | `done` | boolean | |
@@ -270,6 +278,50 @@ pending debounce rather than dropping it.
 The consequence worth knowing: editing an existing note has no cancel. Changes reach the
 board a second or so after you stop typing.
 
+### Attachments
+
+Payloads live one per document in `attachments/{autoId}`:
+
+```
+{ name, type, size, data (base64 dataURL), createdAt }
+```
+
+The task holds only `{id, name, type, size, thumb}`. `thumb` is a JPEG downscaled to 220 px
+on the long edge at quality 0.7 — a few KB — generated in-browser by `makeThumb()` on a
+canvas, with transparency flattened onto the card background rather than black. So the board
+renders thumbnails with no extra reads, and the full image costs exactly one read, on click.
+
+This is what fixes the old defect. Each attachment now has the 1 MiB document budget to
+itself instead of sharing the task's with comments, history and action items, so several
+images on one task work. `MAX_FILE_SIZE` rose from 500 KB to 700 KB accordingly — base64
+costs 4/3, so ~700 KB of file is what fits safely in one document.
+
+**Lifecycle.** While editing, an entry holds `fullData` in memory and no `id`.
+`persistAttachments()` creates the document, stamps the `id` on the entry and drops
+`fullData`; it is idempotent and guarded against concurrent autosave runs, so calling it
+repeatedly is safe. `attachForTask()` then produces what the task document gets — and
+deliberately drops any entry that failed to persist, rather than falling back to writing
+base64 inline.
+
+**Deletion is deferred.** `removeAttach()` only queues the id in `pendingAttachDeletes`,
+because the edit may still be cancelled. A successful save calls `flushAttachDeletes()`;
+`closeModal()` and discarding a note draft call `discardAttachDeletes()`. Sending a task to
+Trash does **not** delete its payloads — restoring has to work. `permDelete()` and
+`emptyTrash()` do, via `deleteAttachmentsOf()`, once the task is genuinely gone.
+
+**Reading.** `attachPreviewSrc()` returns `thumb || data`, so both formats render.
+`loadAttachmentFull()` resolves the full payload from `fullData`, from legacy inline `data`,
+or by fetching the document, memoised in `attachCache`. `showLightboxFor()` displays the
+thumbnail immediately and swaps in the full image when it arrives. Non-image attachments no
+longer have their bytes to hand, so the file chip is a `<button>` calling
+`downloadAttachment()` rather than an `<a href>`.
+
+**Migration.** Settings → Attachment storage counts what is still inline and offers a button.
+`migrateAttachments()` walks the affected tasks, creates a document and a thumbnail per
+inline entry, then rewrites the task's array. It skips entries that already have an `id`, so
+it is idempotent and an interrupted run can simply be repeated. A failure keeps the inline
+copy rather than losing it, and is reported by task and file name.
+
 ### Backup: export and import
 
 Both live on the Settings page, under **Data backup**.
@@ -277,16 +329,19 @@ Both live on the Settings page, under **Data backup**.
 `exportData()` writes a versioned envelope, not the flat object it used to:
 
 ```
-{ workboard: 1, exportedAt: <ISO string>,
-  tasks: [...], trash: [...],
+{ workboard: 2, exportedAt: <ISO string>,
+  tasks: [...], trash: [...], attachments: [...],
   meta: { sites, persons, projectTasks, settings, todayFocus } }
 ```
 
-It reads `trash` with a one-off `.get()` rather than relying on `trashItems`, because that
-listener only starts when Settings is first opened — exporting from the top bar would
-otherwise silently omit it. The pre-v1 format (`{tasks, sites, persons, projectTasks}`, no
-trash, Today list or defaults) is still accepted on import; `normalizeBackup()` flattens
-either shape into one internal form and reports `version: 0` for the old one.
+`attachments` carries the payload documents, so a backup is self-contained: restoring a task
+also restores the images it points at. v1 files (no `attachments`) and the pre-v1 flat format
+both still load.
+
+It reads `trash` and `attachments` with one-off `.get()` calls rather than relying on
+`trashItems`, whose listener only starts when Settings is first opened — exporting from the
+top bar would otherwise silently omit trash. `normalizeBackup()` flattens any of the three
+shapes into one internal form and reports the version it found.
 
 Import runs file → `normalizeBackup` → preview → apply. Nothing is written until a button in
 the preview is pressed. `backupPreview(b, mode)` computes the counts shown for both modes so
@@ -303,6 +358,11 @@ idempotent and re-runnable, and is why a half-finished import is safe to repeat 
 restoring from Trash, which creates a new document and therefore a new id. Tasks in the file
 without an id are added fresh and cannot be de-duplicated; the preview warns when the file
 contains any.
+
+Attachment documents are written in **both** modes, by id. In merge mode only those actually
+referenced by a task in the file are written, so an unrelated payload is not resurrected. A
+task restored without its payload would render an attachment that cannot be opened, which is
+why this is not limited to replace mode.
 
 `reviveTs()` rebuilds Firestore `Timestamp` values from their serialized
 `{seconds, nanoseconds}` form (and the underscored variant, and ISO strings) so restored
@@ -360,16 +420,6 @@ deleted document. The trash copy of B carries `mergedInto: <A's id>` alongside t
 
 Confirmed by reading the source, not by guessing. Roughly ordered by impact. Referred to by
 name rather than number, so fixing one does not renumber the rest.
-
-**Attachments and the document limit.**
-`MAX_FILE_SIZE` is 500 KB per file, but files are stored as base64 data URLs *inside* the
-task document. Base64 adds ~33%, so one 500 KB image is ~683 KB of a hard 1 MiB
-per-document budget that comments, history and action items also share. **Two images on one
-task exceeds the limit and the write fails.** A `storageBucket` is already provisioned;
-moving attachments to Firebase Storage and keeping only URLs in the document is the real
-fix. The merge flow guards against this — it measures the result, warns near the limit and
-refuses past it — but the quick modal and the note editor do not, and will simply fail to
-save.
 
 **Grid cards render controls that CSS hides.**
 `taskCardHTML` emits a done checkbox and edit/note buttons, and `.card-check` /
