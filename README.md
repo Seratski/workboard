@@ -84,6 +84,17 @@ API keys identify a project rather than authorising access to it. This repositor
 public is therefore not a key leak — but it does mean the rules carry the entire security
 burden, and that the app's URL is discoverable.
 
+## Backup and restore
+
+**Settings → Data backup.** Export writes one JSON file containing tasks, trash, sites,
+people, labels, defaults and the Today list. Import reads it back, shows exactly what will
+change, and only then writes — in one of two modes: *Add missing only*, which touches
+nothing that already exists, or *Replace everything*, which makes the board match the file
+and deletes what is not in it (two clicks required).
+
+Tasks are restored under their original ids, so an import is idempotent and safe to re-run.
+Backups from before August 2026, in the old flat format, still load.
+
 ## Known defects
 
 1. **Attachments will hit the Firestore document limit.** Images are stored as base64 data

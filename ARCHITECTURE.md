@@ -2,7 +2,7 @@
 
 Reference for anyone (human or AI assistant) about to change this codebase. Line numbers
 drift with every change and are only rough signposts — the section names and function names
-are the stable landmarks. As of 27 August 2026 `index.html` is 3,100 lines.
+are the stable landmarks. As of 27 August 2026 `index.html` is 3,493 lines.
 
 Several things in this app do not do what their names suggest. Those are called out in
 **[Known defects and constraints](#5-known-defects-and-constraints)** — read that section
@@ -20,10 +20,10 @@ string-concatenating HTML and assigning `innerHTML`; all event handling is inlin
 ```
 index.html
 ├── <head>                     CDN script tags
-├── <style>        … 594        all CSS, organised by /* SECTION */ comments
-├── markup        596– 1021     login, modals, app shell, the five pages
-├── <script>     1022– 3082     Firebase init, global state, application JavaScript
-└── trailing markup   … 3100    mobile filter overlay + lightbox (after </script>)
+├── <style>        … 607        all CSS, organised by /* SECTION */ comments
+├── markup        609– 1058     login, modals, app shell, the five pages
+├── <script>     1059– 3475     Firebase init, global state, application JavaScript
+└── trailing markup   … 3493    mobile filter overlay + lightbox (after </script>)
 ```
 
 Note the last block: two pieces of markup sit **after** the closing `</script>` tag. Code
@@ -49,7 +49,8 @@ code in the same style; mixing the two in one file is possible but confusing.
 ## 2. Backend
 
 Firebase project **`workboard-b9078`**. Config is inline at the top of the script and is
-public by design — a Firebase web API key identifies the project, it does not authorise access.
+public by design — a Firebase web API key identifies the project, it does not authorise
+access.
 
 Auth: Google provider via `signInWithPopup`, `prompt: 'select_account'`, persistence
 `LOCAL`. `getRedirectResult()` is checked first, then `onAuthStateChanged` drives
@@ -116,9 +117,10 @@ follow. There is no automatic expiry; trash grows until emptied by hand.
 `startListeners()` opens `onSnapshot` on `tasks` (ordered `createdAt desc`) and on the four
 `meta` docs — `sites`, `persons`, `projectTasks`, `settings` — plus `todayFocus`. The
 `trash` listener is lazy, starting the first time Settings is opened. Signing out releases
-all seven and clears their handles, so the start guards do not block a later sign-in. Every snapshot calls `renderAll()`, which re-renders
-every list on every page. Cheap at current data volumes; the first thing to revisit if the
-board ever gets slow.
+all seven and clears their handles, so the start guards do not block a later sign-in.
+
+Every snapshot calls `renderAll()`, which re-renders every list on every page. Cheap at
+current data volumes; the first thing to revisit if the board ever gets slow.
 
 A 5-second `setTimeout` force-hides the loading screen as a fallback if no snapshot
 arrives.
@@ -268,6 +270,50 @@ pending debounce rather than dropping it.
 The consequence worth knowing: editing an existing note has no cancel. Changes reach the
 board a second or so after you stop typing.
 
+### Backup: export and import
+
+Both live on the Settings page, under **Data backup**.
+
+`exportData()` writes a versioned envelope, not the flat object it used to:
+
+```
+{ workboard: 1, exportedAt: <ISO string>,
+  tasks: [...], trash: [...],
+  meta: { sites, persons, projectTasks, settings, todayFocus } }
+```
+
+It reads `trash` with a one-off `.get()` rather than relying on `trashItems`, because that
+listener only starts when Settings is first opened — exporting from the top bar would
+otherwise silently omit it. The pre-v1 format (`{tasks, sites, persons, projectTasks}`, no
+trash, Today list or defaults) is still accepted on import; `normalizeBackup()` flattens
+either shape into one internal form and reports `version: 0` for the old one.
+
+Import runs file → `normalizeBackup` → preview → apply. Nothing is written until a button in
+the preview is pressed. `backupPreview(b, mode)` computes the counts shown for both modes so
+the numbers on screen are the numbers that will happen.
+
+**Two modes.** *Add missing only* writes tasks whose `id` is not already on the board, unions
+sites/people/labels, and leaves trash, defaults and the Today list alone (except a Today list
+that is currently empty). *Replace everything* writes every task in the file, deletes board
+tasks absent from it, and overwrites defaults, the Today list and trash. Replace needs two
+clicks: the first arms the button for four seconds, matching how `deleteFromDetail` behaves.
+
+Tasks are written with `.doc(id).set(...)`, so **ids are preserved**. That makes an import
+idempotent and re-runnable, and is why a half-finished import is safe to repeat — unlike
+restoring from Trash, which creates a new document and therefore a new id. Tasks in the file
+without an id are added fresh and cannot be de-duplicated; the preview warns when the file
+contains any.
+
+`reviveTs()` rebuilds Firestore `Timestamp` values from their serialized
+`{seconds, nanoseconds}` form (and the underscored variant, and ISO strings) so restored
+tasks keep their original ordering. Where a timestamp is missing, `serverTimestamp()` fills
+in.
+
+Writes go through `runChunked()` — 20 concurrent operations at a time, `Promise.allSettled`
+— rather than a Firestore `WriteBatch`. A batch aborts wholesale on one bad document, and
+the expected failure here is a single oversized task (base64 attachments against the 1 MiB
+limit). Per-task failures are collected and listed in the report instead of losing the run.
+
 ### Merging two tasks
 
 `openMergePicker()` → `openMergePreview()` → `confirmMerge()`, reached from the
@@ -360,7 +406,11 @@ is ever added.
 - **Dates are compared as `YYYY-MM-DD` strings**, built from local time by `todayStr()`.
   Do not reach for `toISOString().slice(0,10)` — that is UTC, and it used to make "today"
   and "overdue" wrong between midnight and 02:00 Nordic summer time.
-- **Deletion is soft, restore is not identity-preserving.** See the `trash` notes above.
+- **Deletion is soft, restore is not identity-preserving.** Restoring from Trash creates a
+  new document with a new id, so a merge cannot be truly undone and a Today pin aimed at the
+  old id will not follow. Importing a backup does preserve ids — see *Backup: export and
+  import*.
+- **Trash never expires.** It grows until emptied by hand.
 
 ---
 

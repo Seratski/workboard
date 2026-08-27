@@ -176,6 +176,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .detail-attachments{display:flex;flex-wrap:wrap;gap:8px;}
 .detail-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
 
+/* IMPORT */
+.imp-row{display:flex;align-items:baseline;gap:9px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.imp-row:last-child{border-bottom:none;}
+.imp-num{font-family:var(--mono);font-size:13px;font-weight:500;min-width:46px;text-align:right;color:var(--text);}
+.imp-num.add{color:var(--green);}
+.imp-num.del{color:var(--red);}
+.imp-num.skip{color:var(--text3);}
+.imp-label{flex:1;color:var(--text2);}
+.imp-warn{font-size:12px;line-height:1.6;color:var(--amber);background:rgba(255,225,0,0.07);border:1px solid rgba(255,225,0,0.22);border-radius:8px;padding:10px 12px;margin-top:12px;}
+.imp-danger{font-size:12px;line-height:1.6;color:var(--red);background:rgba(255,57,39,0.08);border:1px solid rgba(255,57,39,0.25);border-radius:8px;padding:10px 12px;margin-top:12px;}
+.imp-progress{font-family:var(--mono);font-size:12px;color:var(--text2);}
+.imp-fail{font-family:var(--mono);font-size:11px;color:var(--red);margin-top:4px;word-break:break-all;}
+
 /* MERGE */
 .merge-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:640px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;}
 .merge-head{padding:18px 20px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
@@ -710,6 +723,22 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
   </div>
 </div>
 
+<!-- IMPORT BACKUP -->
+<div class="overlay hidden" id="importOverlay" onclick="if(event.target===this)closeImport()">
+  <div class="merge-modal">
+    <div class="merge-head">
+      <div class="merge-head-title">⬆ Restore from backup</div>
+      <div class="merge-head-sub" id="importSub"></div>
+    </div>
+    <div class="merge-body" id="importBody"></div>
+    <div class="merge-foot" id="importFoot">
+      <button class="btn btn-ghost btn-sm" onclick="closeImport()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="importMergeBtn" onclick="runImport('merge')" style="margin-left:auto;">Add missing only</button>
+      <button class="btn btn-danger btn-sm" id="importReplaceBtn" onclick="armReplaceImport()">Replace everything</button>
+    </div>
+  </div>
+</div>
+
 <!-- MERGE: PICK THE SECOND TASK -->
 <div class="overlay hidden" id="mergePickerOverlay" onclick="if(event.target===this)closeMergePicker()">
   <div class="merge-modal">
@@ -982,9 +1011,17 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
         <div style="font-size:11px;color:var(--text3);margin-top:6px;" id="defaultPersonHint"></div>
       </div>
       <div class="settings-card">
-        <div class="settings-card-title">Data export</div>
-        <div class="settings-card-sub">Download all tasks as JSON backup.</div>
-        <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export backup</button>
+        <div class="settings-card-title">Data backup</div>
+        <div class="settings-card-sub">Download everything as one JSON file, or restore from one.</div>
+        <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export backup</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFileInput').click()">⬆ Import backup</button>
+        </div>
+        <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="handleImportFile(event)" />
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5;">
+          Covers tasks, trash, sites, people, labels, defaults and the Today list. Importing
+          shows you exactly what it will change before anything is written.
+        </div>
       </div>
       <div class="settings-card settings-card-full">
         <div class="settings-card-title">🗑 Trash</div>
@@ -2395,7 +2432,359 @@ async function removePerson(i){persons.splice(i,1);await db.collection('meta').d
 async function addProjectTask(){const v=document.getElementById('newProjectInput').value.trim();if(!v||projectTasks.includes(v))return;projectTasks.push(v);document.getElementById('newProjectInput').value='';await db.collection('meta').doc('projectTasks').set({list:projectTasks});renderSettingsLists();}
 async function removeProjectTask(i){projectTasks.splice(i,1);await db.collection('meta').doc('projectTasks').set({list:projectTasks});renderSettingsLists();renderFilterPanel();}
 
-function exportData(){const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({tasks,sites,persons,projectTasks},null,2));a.download='workboard-backup-'+todayStr()+'.json';a.click();showToast('Exported ✓');}
+// -- BACKUP: EXPORT / IMPORT --
+// v1 envelope. The pre-v1 export was a flat {tasks,sites,persons,projectTasks} object with
+// no trash, Today list or defaults; normalizeBackup still accepts those files.
+const WB_BACKUP_VERSION=1;
+
+async function exportData(){
+  var trashDocs=[], trashNote='';
+  try{
+    // Read trash directly: its listener only starts when Settings is first opened, so
+    // exporting from the top bar would otherwise silently omit it.
+    var snap=await db.collection('trash').get();
+    trashDocs=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+  }catch(e){ trashNote=' (trash could not be read)'; }
+  var payload={
+    workboard:WB_BACKUP_VERSION,
+    exportedAt:new Date().toISOString(),
+    tasks:tasks,
+    trash:trashDocs,
+    meta:{
+      sites:sites, persons:persons, projectTasks:projectTasks,
+      settings:{defaultLabel:defaultLabel, defaultPerson:defaultPerson},
+      todayFocus:todayFocus
+    }
+  };
+  var a=document.createElement('a');
+  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(payload,null,2));
+  a.download='workboard-backup-'+todayStr()+'.json';
+  a.click();
+  showToast('Exported '+tasks.length+' task'+(tasks.length!==1?'s':'')+trashNote+' \u2713');
+}
+
+function normalizeBackup(raw){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('The file is not a JSON object.');
+  if(!Array.isArray(raw.tasks))throw new Error('No "tasks" array in the file \u2014 this does not look like a WorkBoard backup.');
+  var out={version:0,exportedAt:'',tasks:[],trash:[],sites:[],persons:[],projectTasks:[],settings:{},todayFocus:[]};
+  out.tasks=raw.tasks.filter(function(t){return t&&typeof t==='object'&&!Array.isArray(t);});
+  if(raw.workboard){
+    out.version=raw.workboard;
+    out.exportedAt=raw.exportedAt||'';
+    out.trash=Array.isArray(raw.trash)?raw.trash.filter(function(t){return t&&typeof t==='object';}):[];
+    var m=raw.meta||{};
+    out.sites=Array.isArray(m.sites)?m.sites:[];
+    out.persons=Array.isArray(m.persons)?m.persons:[];
+    out.projectTasks=Array.isArray(m.projectTasks)?m.projectTasks:[];
+    out.settings=(m.settings&&typeof m.settings==='object')?m.settings:{};
+    out.todayFocus=Array.isArray(m.todayFocus)?m.todayFocus:[];
+  }else{
+    out.sites=Array.isArray(raw.sites)?raw.sites:[];
+    out.persons=Array.isArray(raw.persons)?raw.persons:[];
+    out.projectTasks=Array.isArray(raw.projectTasks)?raw.projectTasks:[];
+  }
+  return out;
+}
+
+// Firestore Timestamps serialize to {seconds,nanoseconds} (or the underscored form).
+// Revive them so restored tasks keep their original ordering.
+function reviveTs(v){
+  if(!v)return null;
+  if(typeof v==='object'){
+    var sec=(v.seconds!==undefined)?v.seconds:(v._seconds!==undefined?v._seconds:undefined);
+    var ns=(v.nanoseconds!==undefined)?v.nanoseconds:(v._nanoseconds!==undefined?v._nanoseconds:0);
+    if(sec!==undefined&&firebase.firestore.Timestamp)return new firebase.firestore.Timestamp(Number(sec),Number(ns)||0);
+  }
+  if(typeof v==='string'){var d=new Date(v);if(!isNaN(d.getTime()))return firebase.firestore.Timestamp.fromDate(d);}
+  return null;
+}
+
+function taskForWrite(t){
+  var o={};
+  for(var k in t){if(k!=='id')o[k]=t[k];}
+  var c=reviveTs(t.createdAt), u=reviveTs(t.updatedAt);
+  o.createdAt=c||firebase.firestore.FieldValue.serverTimestamp();
+  o.updatedAt=u||firebase.firestore.FieldValue.serverTimestamp();
+  return o;
+}
+
+function backupPreview(b,mode){
+  var have={};
+  tasks.forEach(function(t){have[t.id]=true;});
+  var inFile={};
+  b.tasks.forEach(function(t){if(t.id)inFile[t.id]=true;});
+  var withId=b.tasks.filter(function(t){return !!t.id;});
+  var noId=b.tasks.filter(function(t){return !t.id;});
+  var known=withId.filter(function(t){return have[t.id];}).length;
+  var fresh=withId.length-known;
+  return {
+    fileTasks:b.tasks.length,
+    noId:noId.length,
+    add:fresh+noId.length,
+    skip:mode==='merge'?known:0,
+    overwrite:mode==='replace'?known:0,
+    remove:mode==='replace'?tasks.filter(function(t){return !inFile[t.id];}).length:0,
+    sitesNew:b.sites.filter(function(x){return sites.indexOf(x)===-1;}).length,
+    personsNew:b.persons.filter(function(x){return persons.indexOf(x)===-1;}).length,
+    labelsNew:b.projectTasks.filter(function(x){return projectTasks.indexOf(x)===-1;}).length,
+    trashInFile:b.trash.length,
+    todayInFile:b.todayFocus.length
+  };
+}
+
+// Individual writes in small concurrent batches rather than a WriteBatch: a batch aborts
+// wholesale on one bad document, and an oversized task (base64 attachments against the
+// 1MiB limit) is exactly the failure we want reported per task instead of losing the lot.
+async function runChunked(items,fn,onProgress){
+  var okCount=0, failures=[];
+  for(var i=0;i<items.length;i+=20){
+    var slice=items.slice(i,i+20);
+    var results=await Promise.allSettled(slice.map(fn));
+    results.forEach(function(r,k){
+      if(r.status==='fulfilled')okCount++;
+      else failures.push({item:slice[k],error:(r.reason&&(r.reason.code||r.reason.message))||'unknown error'});
+    });
+    if(onProgress)onProgress(Math.min(i+20,items.length),items.length);
+  }
+  return {okCount:okCount,failures:failures};
+}
+
+
+let pendingBackup=null;
+
+function handleImportFile(e){
+  var file=e.target.files&&e.target.files[0];
+  e.target.value='';
+  if(!file)return;
+  if(file.size>25*1024*1024){showToast('That file is over 25MB \u2014 too large to be a WorkBoard backup');return;}
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var b;
+    try{
+      b=normalizeBackup(JSON.parse(ev.target.result));
+    }catch(err){
+      showToast('Could not read that file: '+(err.message||'invalid JSON'));
+      return;
+    }
+    pendingBackup=b;
+    openImport(file.name);
+  };
+  reader.onerror=function(){showToast('Could not read that file');};
+  reader.readAsText(file);
+}
+
+function openImport(fileName){
+  if(!pendingBackup)return;
+  var b=pendingBackup;
+  var when=b.exportedAt?(' \u00b7 exported '+formatDateFull(new Date(b.exportedAt))):'';
+  document.getElementById('importSub').innerHTML=
+    escHtml(fileName||'backup.json')+when
+    +(b.version?'':' \u00b7 <span style="color:var(--amber)">older format, no trash or Today list</span>');
+  renderImportPreview();
+  document.getElementById('importFoot').style.display='flex';
+  // A finished import hides both action buttons. Restore them, or a second import in the
+  // same session would offer nothing but Cancel.
+  var mb=document.getElementById('importMergeBtn');
+  var rb=document.getElementById('importReplaceBtn');
+  mb.style.display='';
+  rb.style.display='';
+  rb.textContent='Replace everything';
+  rb.setAttribute('data-armed','0');
+  document.getElementById('importOverlay').classList.remove('hidden');
+}
+
+function closeImport(){
+  document.getElementById('importOverlay').classList.add('hidden');
+  pendingBackup=null;
+}
+
+function impRow(n,cls,label){
+  return '<div class="imp-row"><span class="imp-num '+cls+'">'+n+'</span><span class="imp-label">'+label+'</span></div>';
+}
+
+function renderImportPreview(){
+  var b=pendingBackup;
+  if(!b)return;
+  var m=backupPreview(b,'merge'), r=backupPreview(b,'replace');
+  var h='';
+
+  h+='<div class="merge-field"><div class="merge-field-label">In the file</div>'
+    +impRow(b.tasks.length,'','task'+(b.tasks.length!==1?'s':''))
+    +impRow(b.trash.length,'','item'+(b.trash.length!==1?'s':'')+' in trash')
+    +impRow(b.sites.length,'','site'+(b.sites.length!==1?'s':''))
+    +impRow(b.persons.length,'','person'+(b.persons.length!==1?'s':''))
+    +impRow(b.projectTasks.length,'','label'+(b.projectTasks.length!==1?'s':''))
+    +impRow(b.todayFocus.length,'','pinned in Today')
+    +'</div>';
+
+  h+='<div class="merge-field"><div class="merge-field-label">Add missing only'
+    +'<span class="form-hint">nothing existing is touched</span></div>'
+    +impRow('+'+m.add,'add','task'+(m.add!==1?'s':'')+' added')
+    +impRow(m.skip,'skip','already on the board, left alone')
+    +impRow('+'+(m.sitesNew+m.personsNew+m.labelsNew),'add','new sites, people and labels')
+    +'<div class="merge-note">Trash, the Today list and your defaults are not touched in this mode.</div>'
+    +'</div>';
+
+  h+='<div class="merge-field"><div class="merge-field-label">Replace everything'
+    +'<span class="form-hint">makes the board match the file exactly</span></div>'
+    +impRow('+'+r.add,'add','task'+(r.add!==1?'s':'')+' added')
+    +impRow(r.overwrite,'','overwritten with the file version')
+    +impRow('-'+r.remove,'del','task'+(r.remove!==1?'s':'')+' deleted \u2014 not in the file')
+    +'</div>';
+
+  if(m.noId){
+    var one=m.noId===1;
+    h+='<div class="imp-warn">'+m.noId+' task'+(one?'':'s')+' in the file '+(one?'has':'have')+' no id, so '
+      +(one?'it':'they')+' cannot be matched against the board and will be added again every time you'
+      +' import this file.</div>';
+  }
+  if(r.remove){
+    h+='<div class="imp-danger"><strong>Replace deletes '+r.remove+' task'+(r.remove!==1?'s':'')
+      +'</strong> that exist on the board but not in this file. Those go straight out, not to Trash.'
+      +' Export a fresh backup first if you are unsure.</div>';
+  }
+  document.getElementById('importBody').innerHTML=h;
+}
+
+function armReplaceImport(){
+  var btn=document.getElementById('importReplaceBtn');
+  if(btn.getAttribute('data-armed')!=='1'){
+    btn.textContent='\u26a0 Confirm replace';
+    btn.setAttribute('data-armed','1');
+    setTimeout(function(){
+      if(btn.getAttribute('data-armed')==='1'){
+        btn.textContent='Replace everything';
+        btn.setAttribute('data-armed','0');
+      }
+    },4000);
+    return;
+  }
+  runImport('replace');
+}
+
+function importStatus(html){
+  document.getElementById('importBody').innerHTML=html;
+}
+
+async function runImport(mode){
+  var b=pendingBackup;
+  if(!b)return;
+  document.getElementById('importFoot').style.display='none';
+  var lines=[];
+  var report=function(extra){
+    importStatus('<div class="merge-field"><div class="merge-field-label">'
+      +(mode==='replace'?'Replacing':'Importing')+'</div>'
+      +lines.map(function(l){return '<div class="imp-row"><span class="imp-label">'+l+'</span></div>';}).join('')
+      +(extra||'')+'</div>');
+  };
+  var progress=function(label){
+    return function(done,total){report('<div class="imp-progress">'+label+' '+done+'/'+total+'\u2026</div>');};
+  };
+  var failures=[];
+
+  try{
+    var have={};
+    tasks.forEach(function(t){have[t.id]=true;});
+    var inFile={};
+    b.tasks.forEach(function(t){if(t.id)inFile[t.id]=true;});
+
+    // 1. tasks
+    var toWrite = mode==='replace'
+      ? b.tasks
+      : b.tasks.filter(function(t){return !t.id||!have[t.id];});
+    if(toWrite.length){
+      var w=await runChunked(toWrite,function(t){
+        return t.id
+          ? db.collection('tasks').doc(t.id).set(taskForWrite(t))
+          : db.collection('tasks').add(taskForWrite(t));
+      },progress('Writing tasks'));
+      failures=failures.concat(w.failures);
+      lines.push(w.okCount+' task'+(w.okCount!==1?'s':'')+(mode==='replace'?' written':' added'));
+    }else{
+      lines.push('No tasks needed writing');
+    }
+    report();
+
+    // 2. deletions, replace mode only
+    if(mode==='replace'){
+      var toDelete=tasks.filter(function(t){return !inFile[t.id];});
+      if(toDelete.length){
+        var d=await runChunked(toDelete,function(t){
+          return db.collection('tasks').doc(t.id).delete();
+        },progress('Deleting tasks'));
+        failures=failures.concat(d.failures);
+        lines.push(d.okCount+' task'+(d.okCount!==1?'s':'')+' deleted');
+        report();
+      }
+    }
+
+    // 3. lists
+    var nextSites = mode==='replace' ? b.sites.slice() : mergeUniq(sites,b.sites);
+    var nextPersons = mode==='replace' ? b.persons.slice() : mergeUniq(persons,b.persons);
+    var nextLabels = mode==='replace' ? b.projectTasks.slice() : mergeUniq(projectTasks,b.projectTasks);
+    if(nextSites.length)await db.collection('meta').doc('sites').set({list:nextSites});
+    if(nextPersons.length)await db.collection('meta').doc('persons').set({list:nextPersons});
+    if(nextLabels.length)await db.collection('meta').doc('projectTasks').set({list:nextLabels});
+    lines.push('Sites, people and labels updated');
+    report();
+
+    // 4. defaults, Today list and trash: replace mode only, or when currently empty
+    if(mode==='replace'){
+      await db.collection('meta').doc('settings').set({
+        defaultLabel:b.settings.defaultLabel||'',
+        defaultPerson:b.settings.defaultPerson||''
+      });
+      await db.collection('meta').doc('todayFocus').set({items:b.todayFocus||[]});
+      lines.push('Defaults and Today list restored');
+      report();
+      if(b.trash.length){
+        var t=await runChunked(b.trash,function(item){
+          var o={};
+          for(var k in item){if(k!=='id')o[k]=item[k];}
+          if(!reviveTs(item.deletedAt))o.deletedAt=firebase.firestore.FieldValue.serverTimestamp();
+          else o.deletedAt=reviveTs(item.deletedAt);
+          return item.id
+            ? db.collection('trash').doc(item.id).set(o)
+            : db.collection('trash').add(o);
+        },progress('Restoring trash'));
+        failures=failures.concat(t.failures);
+        lines.push(t.okCount+' trash item'+(t.okCount!==1?'s':'')+' restored');
+        report();
+      }
+    }else if(b.todayFocus.length&&!todayFocus.length){
+      await db.collection('meta').doc('todayFocus').set({items:b.todayFocus});
+      lines.push('Today list restored, it was empty');
+      report();
+    }
+
+    var extra='';
+    if(failures.length){
+      extra='<div class="imp-danger"><strong>'+failures.length+' item'+(failures.length!==1?'s':'')
+        +' could not be written.</strong> The usual cause is a task whose base64 attachments push the'
+        +' document past Firestore\u2019s 1MiB limit.'
+        +failures.slice(0,6).map(function(f){
+            return '<div class="imp-fail">'+escHtml((f.item&&(f.item.title||f.item.id))||'(untitled)')+' \u2014 '+escHtml(String(f.error))+'</div>';
+          }).join('')
+        +(failures.length>6?'<div class="imp-fail">\u2026and '+(failures.length-6)+' more</div>':'')
+        +'</div>';
+    }else{
+      extra='<div class="merge-note" style="color:var(--green)">Finished with no errors.</div>';
+    }
+    report(extra);
+    document.getElementById('importFoot').style.display='flex';
+    document.getElementById('importMergeBtn').style.display='none';
+    document.getElementById('importReplaceBtn').style.display='none';
+    showToast(failures.length?('Import finished with '+failures.length+' error'+(failures.length!==1?'s':'')):'Import complete \u2713');
+  }catch(e){
+    lines.push('Stopped: '+(e.code||e.message||'unknown error'));
+    report('<div class="imp-danger">The import stopped part-way. Whatever was written before the'
+      +' failure is already on the board \u2014 re-running in the same mode is safe, because tasks are'
+      +' written by their own id.</div>');
+    document.getElementById('importFoot').style.display='flex';
+    showToast('Import failed: '+(e.code||e.message||'error'));
+  }
+}
+
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
 // -- DETAIL MODAL --
@@ -3020,6 +3409,9 @@ document.addEventListener('paste', (e) => {
 // -- EVENT LISTENERS --
 // Intercept browser back button
 window.addEventListener('popstate', function(e) {
+  if (!document.getElementById('importOverlay').classList.contains('hidden')) {
+    closeImport(); history.pushState(null,'',location.href); return;
+  }
   if (!document.getElementById('mergePreviewOverlay').classList.contains('hidden')) {
     closeMergePreview(); history.pushState(null,'',location.href); return;
   }
@@ -3045,6 +3437,7 @@ history.pushState(null,'',location.href);
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
+    if(!document.getElementById('importOverlay').classList.contains('hidden')){closeImport();return;}
     if(!document.getElementById('mergePreviewOverlay').classList.contains('hidden')){closeMergePreview();return;}
     if(!document.getElementById('mergePickerOverlay').classList.contains('hidden')){closeMergePicker();return;}
     closeModal();closeDetail();
