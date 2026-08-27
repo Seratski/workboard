@@ -1,8 +1,8 @@
 # WorkBoard — technical architecture
 
 Reference for anyone (human or AI assistant) about to change this codebase. Line numbers
-refer to `index.html` as of commit `56865e7` (1 May 2026, 2,507 lines). They will drift;
-the section names and function names are the stable landmarks.
+drift with every change and are only rough signposts — the section names and function names
+are the stable landmarks. As of 27 August 2026 `index.html` is 3,100 lines.
 
 Several things in this app do not do what their names suggest. Those are called out in
 **[Known defects and constraints](#5-known-defects-and-constraints)** — read that section
@@ -19,12 +19,11 @@ string-concatenating HTML and assigning `innerHTML`; all event handling is inlin
 
 ```
 index.html
-├── lines    1–  11   <head>, CDN script tags
-├── lines   12– 541   <style> — all CSS, organised by /* SECTION */ comments
-├── lines  543– 936   markup: login, modals, app shell, the five pages
-├── lines  937– 951   Firebase init + global state
-├── lines  952–2489   application JavaScript
-└── lines 2490–2507   mobile filter overlay + lightbox markup (after </script>)
+├── <head>                     CDN script tags
+├── <style>        … 594        all CSS, organised by /* SECTION */ comments
+├── markup        596– 1021     login, modals, app shell, the five pages
+├── <script>     1022– 3082     Firebase init, global state, application JavaScript
+└── trailing markup   … 3100    mobile filter overlay + lightbox (after </script>)
 ```
 
 Note the last block: two pieces of markup sit **after** the closing `</script>` tag. Code
@@ -39,7 +38,6 @@ interaction, long after parsing. Anything added at the end of the file must go b
 | `firebase-app-compat` | 10.14.1 | SDK core |
 | `firebase-auth-compat` | 10.14.1 | Google sign-in |
 | `firebase-firestore-compat` | 10.14.1 | All persistence |
-| `sortablejs` | 1.15.2 | **nothing — loaded and never used** |
 | Google Fonts | — | DM Sans, DM Mono |
 
 The Firebase **compat** SDK is used, not the modular v9+ API. Calls look like
@@ -50,12 +48,12 @@ code in the same style; mixing the two in one file is possible but confusing.
 
 ## 2. Backend
 
-Firebase project **`workboard-b9078`**. Config is inline at line 938 and is public by
-design — a Firebase web API key identifies the project, it does not authorise access.
+Firebase project **`workboard-b9078`**. Config is inline at the top of the script and is
+public by design — a Firebase web API key identifies the project, it does not authorise access.
 
 Auth: Google provider via `signInWithPopup`, `prompt: 'select_account'`, persistence
 `LOCAL`. `getRedirectResult()` is checked first, then `onAuthStateChanged` drives
-`handleUser()` (line 953), which swaps the login screen for the app shell and calls
+`handleUser()`, which swaps the login screen for the app shell and calls
 `startListeners()`.
 
 `signInGoogle()` deliberately swallows `auth/popup-closed-by-user` and
@@ -115,9 +113,10 @@ follow. There is no automatic expiry; trash grows until emptied by hand.
 
 ### Real-time listeners
 
-`startListeners()` (line 1002) opens `onSnapshot` on `tasks` (ordered `createdAt desc`),
-each of the four `meta` docs, and `todayFocus`. The `trash` listener is lazy — it starts
-the first time Settings is opened. Every snapshot calls `renderAll()`, which re-renders
+`startListeners()` opens `onSnapshot` on `tasks` (ordered `createdAt desc`) and on the four
+`meta` docs — `sites`, `persons`, `projectTasks`, `settings` — plus `todayFocus`. The
+`trash` listener is lazy, starting the first time Settings is opened. Signing out releases
+all seven and clears their handles, so the start guards do not block a later sign-in. Every snapshot calls `renderAll()`, which re-renders
 every list on every page. Cheap at current data volumes; the first thing to revisit if the
 board ever gets slow.
 
@@ -145,11 +144,16 @@ these would be the single highest-value readability change to the file.
 Other state: `viewMode` (`list`/`grid`/`kanban`), `detailTaskId`, `modalAttachments`,
 `richAttachments`, `mentionState`, `todayPanelOpen`, `defaultLabel`, `defaultPerson`.
 
-`localStorage` holds exactly one key: `wb_task_draft` — `{title, note, priority, date,
-savedAt}`, written by `closeModal()` when a new (not edited) task has a title, restored by
-`openModal()` if less than 24 h old, cleared on successful save. Note that `saveTask()`
-sets `editingId = 'saved'` purely as a sentinel to stop `closeModal()` re-saving the draft
-it just cleared.
+`localStorage` holds two keys, both drafts of unsaved work:
+
+- `wb_task_draft` — `{title, note, priority, date, savedAt}` from the quick-task modal,
+  written by `closeModal()` when a new (not edited) task has a title, restored by
+  `openModal()` if less than 24 h old, cleared on a successful save. `saveTask()` sets
+  `editingId = 'saved'` purely as a sentinel so `closeModal()` does not re-save the draft
+  it just cleared.
+- `wb_rich_draft` — the whole note-editor state for a note that has never been saved,
+  written by `richFlush()`, offered back by `openRichEditor(null)` for seven days, cleared
+  on save or discard. See *The note editor*.
 
 ---
 
@@ -157,7 +161,7 @@ it just cleared.
 
 ### Pages
 
-`showPage(p)` (line 1126) toggles `#page-{board,today,done,rich,settings}`. `board` and
+`showPage(p)` toggles `#page-{board,today,done,rich,settings}`. `board` and
 `rich` use `display:flex`, the others `display:block`. There is no router and no URL state
 — reloading always lands on Board.
 
@@ -169,6 +173,18 @@ it just cleared.
 | `rich` | *none* | Full-page note editor; entered via "+ Note" or a 📝 button |
 | `settings` | ⚙️ Settings | Sites, People, Labels, defaults, Trash, Account |
 
+### Keyboard shortcuts
+
+| Keys | Action |
+|---|---|
+| `Ctrl/Cmd + K` | Focus the board search box (switches to Board first) |
+| `Ctrl/Cmd + Shift + K` | New task |
+| `Ctrl/Cmd + B` / `I` | Bold / italic, only while the note editor body has focus |
+| `Esc` | Closes the topmost overlay: merge preview, merge picker, then the modals |
+
+The browser Back button is intercepted by a `popstate` handler that closes the topmost
+overlay instead of leaving the page.
+
 ### Two different "today" concepts
 
 This trips people up. The Today page shows both:
@@ -177,28 +193,31 @@ This trips people up. The Today page shows both:
    `meta/todayFocus` as `{id, title, done}` — the title is **denormalised**, so renaming a
    task does not update its Today entry.
 2. **Due today** — computed, every task where `date === today`. Drives the badge on the
-   Today nav tab (`updateBadges`, line 1021).
+   Today nav tab (`updateBadges`).
 
 The badge on the Today *panel* toggle button counts undone **focus** items. Same word, two
 meanings, two different counts on screen at once.
 
 ### Board view modes
 
-- **list** (`taskHTML`, line 1345) — the full-detail row: stripe, checkbox, tags, links, note, action progress, attachments.
-- **grid** (`taskCardHTML`, line 1317) — compact cards. Several controls here are broken; see *Five malformed `onclick` attributes*.
-- **kanban** (`kanbanCardHTML`, line 1290) — three columns, **bucketed by priority** (High / Medium / Other), not by status. Cards cannot be dragged between columns; it is a read-only three-way split.
+- **list** (`taskHTML`) — the full-detail row: stripe, checkbox, tags, links, note, action progress, attachments.
+- **grid** (`taskCardHTML`) — compact cards. Note that `.card-check` and `.card-actions` are
+  `display:none` in the CSS with no hover rule, so the per-card checkbox and edit/note
+  buttons are rendered but never visible. Clicking the card opens the detail modal, which
+  has the equivalent controls. See *Grid cards render controls that CSS hides*.
+- **kanban** (`kanbanCardHTML`) — three columns, **bucketed by priority** (High / Medium / Other), not by status. Cards cannot be dragged between columns; it is a read-only three-way split.
 
 ### Sorting and grouping
 
-One `<select>` drives both. `priority`, `date`, `oldest`, `created` sort via `getSorted()`
-(line 1186); `site`, `person`, `label` group via `getGrouped()` (line 1196). Because a task
+One `<select>` drives both. `priority`, `date`, `oldest`, `created` sort via `getSorted()`;
+`site`, `person`, `label` group via `getGrouped()`. Because a task
 can carry several sites, **grouping duplicates a task into every group it belongs to** —
 the visible count can exceed the number of tasks. Tasks with no value land in a
 `(no site)` / `(no person)` / `(no label)` bucket.
 
 ### Filtering
 
-`getFiltered(mode)` (line 1213). Modes: `board`, `today`, `done`, `search`.
+`getFiltered(mode)`. Modes: `board`, `today`, `done`, `search`.
 
 **Filters combine with AND, not OR.** The code is
 `afS.every(s => (t.sites||[]).includes(s))` — selecting DK *and* NO shows only tasks tagged
@@ -211,7 +230,7 @@ only mode that includes completed tasks.
 ### Mentions
 
 `@` autocomplete over persons + sites + labels. Wired up by `initMentionInput()`, which is
-called on exactly one element: the detail-modal comment box. `linkify()` (line 1310) renders
+called on exactly one element: the detail-modal comment box. `linkify()` renders
 `@name` as a clickable span that pushes the mention into the search box. The mention regex
 allows one or two words, so three-part names are only partly matched.
 
@@ -302,51 +321,23 @@ task document. Base64 adds ~33%, so one 500 KB image is ~683 KB of a hard 1 MiB
 per-document budget that comments, history and action items also share. **Two images on one
 task exceeds the limit and the write fails.** A `storageBucket` is already provisioned;
 moving attachments to Firebase Storage and keeping only URLs in the document is the real
-fix. The merge flow guards against this (it measures the result and refuses), but the quick
-modal and the note editor do not — they will simply fail to save.
+fix. The merge flow guards against this — it measures the result, warns near the limit and
+refuses past it — but the quick modal and the note editor do not, and will simply fail to
+save.
 
-**Drag-to-reorder in the Today list throws.**
-`renderTodayFocus()` emits `ondragstart="todayDragStart(event,i)"`,
-`ondragover="todayDragOver(event)"` and `ondrop="todayDrop(event,i)"`. **None of the three
-functions exists** anywhere in the file, so dragging raises a `ReferenceError`. The ↑/↓
-buttons (`moveTodayItem`) work, so the feature is not entirely absent — either implement the
-handlers or drop the `draggable` attribute.
+**Grid cards render controls that CSS hides.**
+`taskCardHTML` emits a done checkbox and edit/note buttons, and `.card-check` /
+`.card-actions` are `display:none` with no hover rule to reveal them. Their `onclick`
+handlers were also malformed until August 2026; that is fixed, but the markup is still
+unreachable. Either add a `.task-card-grid:hover` rule to reveal them, or delete the markup.
+Not urgent: the card opens the detail modal, which offers the same actions.
 
-**Five malformed `onclick` attributes.**
-Handlers built as `onclick="fn(\"'+id+'\")"`. Inside a single-quoted JS string `\"` is just
-`"`, so the emitted HTML is `onclick="toggleDone("abc123")"` — the attribute value ends at
-the second quote and the handler is truncated to `toggleDone(`. Broken as a result: the grid
-view's done checkbox, its ✏️ edit and 📝 note buttons, and the attachment lightbox in both
-list view and the detail modal. The fix is `\'` — escaped single quotes, as every other call
-site in the file already uses.
-
-**`Ctrl+K` does not do what the UI says.**
-The search placeholder reads "Search… (Ctrl+K)" but the keydown handler maps `Ctrl/Cmd+K`
-to `openModal()` — new task. Change one or the other.
-
-**SortableJS is loaded and never used.**
-`new Sortable` appears zero times. ~40 KB of CDN JavaScript on every load for nothing.
-Delete the script tag, or use it to fix the Today drag handlers.
-
-**Completing a task from the detail modal skips history.**
-`toggleDone()` appends a `completed`/`reopened` history entry. `toggleDoneFromDetail()`
-writes only `{done: !t.done}`, so the History section silently misses completions made from
-the detail modal.
-
-**Sign-out leaks listeners.**
-`handleUser()`'s else-branch unsubscribes `tasks`, `sites`, `persons` and `projectTasks`,
-but not `meta/settings`, `meta/todayFocus` or `trash`. `startTodayFocusListener()` and
-`startTrashListener()` both early-return when their unsub variable is truthy and never clear
-it, so those listeners survive a sign-out and stay attached under the next account.
-
-**`esc()` is incomplete.**
-`esc()` escapes backslashes and single quotes for interpolation into inline handlers, but
-not double quotes or `<`. A site, person or label containing a `"` breaks the surrounding
-attribute. `escHtml()` handles text content correctly; the two are easy to confuse and are
-not interchangeable.
-
-**Dead code.** `modalAutoSaveTimer` and `modalDraftId` are never read. `fActions` is declared
-alongside the filter variables despite being modal state.
+**Sign-out does not reset every guard.**
+`handleUser()` now releases all seven listeners and clears their handles, so a later
+sign-in re-attaches cleanly. What it does not reset is editor and filter state — `afS`,
+`viewMode`, `richEditingId` and similar survive a sign-out because they are module-level
+globals with no teardown. Harmless in a single-user app; worth knowing if a second account
+is ever added.
 
 ### Structural constraints, not bugs
 
@@ -366,9 +357,9 @@ alongside the filter variables despite being modal state.
 - **No test suite, no staging.** `main` is production.
 - **`renderAll()` re-renders everything** on every snapshot, and card HTML is built by
   string concatenation. Fine at current scale; the obvious bottleneck later.
-- **Dates are compared as `YYYY-MM-DD` strings** in the browser's local timezone via
-  `new Date().toISOString()`. `toISOString()` is UTC, so between 00:00 and 02:00 local
-  summer time "today" is still yesterday's date for a Nordic user.
+- **Dates are compared as `YYYY-MM-DD` strings**, built from local time by `todayStr()`.
+  Do not reach for `toISOString().slice(0,10)` — that is UTC, and it used to make "today"
+  and "overdue" wrong between midnight and 02:00 Nordic summer time.
 - **Deletion is soft, restore is not identity-preserving.** See the `trash` notes above.
 
 ---

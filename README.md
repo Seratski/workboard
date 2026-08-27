@@ -13,10 +13,10 @@ served as a static file, with Google sign-in and a Firestore backend.
 
 | | |
 |---|---|
-| Source | `index.html` — HTML, CSS and JavaScript in one file (~2,500 lines) |
+| Source | `index.html` — HTML, CSS and JavaScript in one file (~3,100 lines) |
 | Build | None. The file is the artifact. |
 | Backend | Firebase project `workboard-b9078` (Firestore + Google Auth) |
-| Runtime deps | Firebase 10.14.1 (compat SDK), SortableJS 1.15.2, Google Fonts — all via CDN |
+| Runtime deps | Firebase 10.14.1 (compat SDK), Google Fonts — both via CDN |
 | Data scope | **Single-user by design.** No per-user scoping exists in the code — see Access model |
 
 ## Running it locally
@@ -86,23 +86,29 @@ burden, and that the app's URL is discoverable.
 
 ## Known defects
 
-Confirmed by reading the source, in rough order of impact:
-
 1. **Attachments will hit the Firestore document limit.** Images are stored as base64 data
    URLs inside the task document. The 500 KB per-file cap becomes ~683 KB encoded against a
    hard 1 MiB per-document limit, so two images on one task fail to save. The merge flow
    measures the result and refuses; the quick modal and note editor do not. A
    `storageBucket` is configured but Firebase Storage is never used.
-2. **Drag-to-reorder in the Today panel throws.** `todayDragStart`, `todayDragOver` and
-   `todayDrop` are referenced in the markup but never defined. The ↑/↓ buttons work.
-3. **Five malformed `onclick` attributes.** A `\"` escaping mistake ends the attribute
-   early, disabling the grid-view checkbox and edit/note buttons, and the attachment
-   lightbox in both list view and the detail modal.
-4. **`Ctrl+K` opens a new task, not search** — the search placeholder says otherwise.
-5. **SortableJS is loaded and never used** — ~40 KB of CDN JavaScript per page load.
+2. **Grid cards render a checkbox and edit buttons that CSS hides.** `.card-check` and
+   `.card-actions` are `display:none` with no hover rule. Harmless — clicking the card opens
+   the detail modal, which has the same actions — but the markup is dead as it stands.
 
-Fixed in August 2026, described in ARCHITECTURE.md under *The note editor*: the note
-editor used to discard all formatting on save, and its "Draft saved" label used to save
-nothing at all.
+Fixed in August 2026 and described in ARCHITECTURE.md:
+
+- The note editor discarded all formatting on save, and its "Draft saved" label saved
+  nothing at all. Notes are now stored as sanitized HTML and autosave is real.
+- Dragging an item in the Today panel raised a `ReferenceError` — the three handlers the
+  markup called had never been written.
+- Five `onclick` attributes were malformed by a `\"` escaping mistake, which broke the
+  attachment lightbox in list view and the detail modal.
+- `Ctrl+K` opened a new task while the search box claimed it focused search. It now
+  focuses search; `Ctrl+Shift+K` creates a task.
+- Dates were derived from `toISOString()`, which is UTC, so "today" and "overdue" were
+  wrong between midnight and 02:00 Nordic summer time.
+- SortableJS was downloaded on every page load and never used. It is gone.
+- Completing a task from the detail modal skipped its history entry, and signing out
+  leaked three listeners.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.

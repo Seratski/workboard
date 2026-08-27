@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>WorkBoard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-auth-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-firestore-compat.min.js"></script>
@@ -536,6 +535,9 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .today-panel-count{font-size:11px;font-family:var(--mono);color:var(--text3);background:var(--bg3);padding:1px 6px;border-radius:8px;}
 .today-panel-body{flex:1;overflow-y:auto;padding:10px 10px;}
 .today-item{display:flex;align-items:center;gap:6px;padding:8px 8px;border-radius:7px;border:1px solid var(--border);margin-bottom:5px;background:var(--bg2);transition:background .1s;}
+.today-item[draggable="true"]{cursor:grab;}
+.today-item.dragging{opacity:0.4;cursor:grabbing;}
+.today-item.drag-over{border-color:var(--accent);background:var(--accent-glow);}
 .today-item:hover{border-color:var(--border2);}
 .today-item.done-today{opacity:0.45;}
 .today-item-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
@@ -1032,7 +1034,7 @@ let rSites=[],rPersons=[],rProjects=[],rActions=[],richEditingId=null,richAutoSa
 let richDirty=false;
 const RICH_DRAFT_KEY='wb_rich_draft';
 let afS=[],afP=[],afT=[],afPr=[],afOv=false;
-let unsubTasks,unsubSites,unsubPersons,unsubProjects;
+let unsubTasks,unsubSites,unsubPersons,unsubProjects,unsubSettings;
 
 // -- AUTH --
 function handleUser(user){
@@ -1055,7 +1057,13 @@ function handleUser(user){
     document.getElementById('loadingScreen').classList.add('hidden');
     document.getElementById('appShell').style.display='none';
     const fabEl2=document.getElementById('fab');if(fabEl2)fabEl2.style.display='none';
-    if(unsubTasks){unsubTasks();unsubSites();unsubPersons();if(unsubProjects)unsubProjects();}
+    // Release every listener, including the lazy ones, and clear the handles so their
+    // start guards do not block a later sign-in from re-attaching them.
+    [unsubTasks,unsubSites,unsubPersons,unsubProjects,unsubSettings,unsubTodayFocus,unsubTrash]
+      .forEach(function(fn){if(typeof fn==='function'){try{fn();}catch(e){}}});
+    unsubTasks=unsubSites=unsubPersons=unsubProjects=unsubSettings=undefined;
+    unsubTodayFocus=undefined;unsubTrash=undefined;
+    tasks=[];todayFocus=[];trashItems=[];
   }
 }
 
@@ -1093,7 +1101,7 @@ function startListeners(){
   unsubPersons=db.collection('meta').doc('persons').onSnapshot(doc=>{if(doc.exists&&doc.data().list)persons=doc.data().list;renderAll();});
   unsubProjects=db.collection('meta').doc('projectTasks').onSnapshot(doc=>{if(doc.exists&&doc.data().list)projectTasks=doc.data().list;renderAll();});
   startTodayFocusListener();
-  db.collection('meta').doc('settings').onSnapshot(doc=>{
+  unsubSettings=db.collection('meta').doc('settings').onSnapshot(doc=>{
     if(doc.exists){defaultLabel=doc.data().defaultLabel||'';defaultPerson=doc.data().defaultPerson||'';}
     renderDefaultLabelSelect();
     renderDefaultPersonSelect();
@@ -1104,7 +1112,7 @@ function startListeners(){
 function renderAll(){renderFilterPanel();renderTasks();renderTodayList();renderDoneList();renderSettingsLists();updateBadges();renderMobileFilterBar();const cnt=afS.length+afP.length+afT.length+afPr.length+(afOv?1:0);const btn=document.getElementById('bnav-filter');if(btn)btn.innerHTML='<span class="bni">⚡</span>'+(cnt?'Filter ('+cnt+')':'Filter');}
 
 function updateBadges(){
-  const today=new Date().toISOString().slice(0,10);
+  const today=todayStr();
   const n=tasks.filter(t=>!t.done&&t.date===today).length;
   const badge=n?' <span class="nav-badge">'+n+'</span>':'';
   document.getElementById('tab-today').innerHTML='📅 Today'+badge;
@@ -1297,7 +1305,7 @@ function getGrouped(arr, groupBy) {
 
 function getFiltered(mode){
   const q=(document.getElementById('searchInput')?.value||'').toLowerCase().trim();
-  const today=new Date().toISOString().slice(0,10);
+  const today=todayStr();
   return tasks.filter(t=>{
     if(mode==='done')return t.done;
     if(mode==='today')return !t.done&&t.date===today;
@@ -1447,7 +1455,7 @@ function taskCardHTML(t){
   var dateStr=t.date?'<span class="card-date'+(od?' overdue':'')+'">'+ formatDate(t.date)+(od?' ⚠':'')+'</span>':''  ;
   var h='<div class="task-card-grid '+(t.done?'done':'')+'" id="tc-'+t.id+'" onclick="openDetail(this)">';
   h+='<div class="card-stripe '+sc+'"></div>';
-  h+='<div class="card-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="event.stopPropagation();toggleDone(\"'+t.id+'\")"></div></div>';
+  h+='<div class="card-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="event.stopPropagation();toggleDone(\''+t.id+'\')"></div></div>';
   h+='<div class="card-title">'+escHtml(t.title||"(No title)")+'</div>';
   if(t.note)h+='<div class="card-note">'+escHtml(t.note)+'</div>';
   var commentBadgeCard=(t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'';
@@ -1455,8 +1463,8 @@ function taskCardHTML(t){
   if(actions.length)h+='<div class="card-progress"><div class="card-progress-fill" style="width:'+pct+'%"></div></div>';
   if(attachCount)h+='<span class="card-attach-count">📎 '+attachCount+'</span>';
   h+='<div class="card-actions">';
-  if(t.richBody)h+='<button class="ia" onclick="event.stopPropagation();openRichEditor(\"'+t.id+'\")">📝</button>';
-  h+='<button class="ia" onclick="event.stopPropagation();openEdit(\"'+t.id+'\")">✏️</button>';
+  if(t.richBody)h+='<button class="ia" onclick="event.stopPropagation();openRichEditor(\''+t.id+'\')">📝</button>';
+  h+='<button class="ia" onclick="event.stopPropagation();openEdit(\''+t.id+'\')">✏️</button>';
 
   h+='</div></div>';
   return h;
@@ -1503,7 +1511,7 @@ function attachHTML(t) {
   return '<div class="task-attachments">'
     + atts.map((a, i) => {
       if (a.type && a.type.startsWith('image/')) {
-        return '<img class="task-attach-img" src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="showTaskAttachLightbox(\"' + t.id + '\",' + i + ')" />';
+        return '<img class="task-attach-img" src="' + a.data + '" alt="' + escHtml(a.name) + '" onclick="showTaskAttachLightbox(\'' + t.id + '\',' + i + ')" />';
       }
       return '<a class="task-attach-file" href="' + a.data + '" download="' + escHtml(a.name) + '">📄 ' + escHtml(a.name) + '</a>';
     }).join('')
@@ -1518,9 +1526,27 @@ function showTaskAttachLightbox(taskId, i) {
   document.getElementById('lightbox').classList.remove('hidden');
 }
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+// Values interpolated into an inline handler sit inside BOTH a JS string and an HTML
+// attribute, so both layers need escaping. JS first, then HTML, or the ampersands of the
+// HTML entities would themselves get escaped.
+function esc(s){
+  return String(s==null?'':s)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/&/g,'&amp;')
+    .replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;');
+}
 function formatDate(d){if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
-function isOverdue(d){if(!d)return false;return d<new Date().toISOString().slice(0,10);}
+// toISOString() is UTC. Between midnight and 02:00 Nordic summer time that is still
+// yesterday's date, which made "today" and "overdue" wrong for the first two hours of
+// every day. Always build the YYYY-MM-DD key from local time.
+function todayStr(d){
+  var x=d||new Date(), m=x.getMonth()+1, day=x.getDate();
+  return x.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day;
+}
+function isOverdue(d){if(!d)return false;return d<todayStr();}
 // -- MENTION AUTOCOMPLETE --
 var mentionState={active:false,start:0,input:null};
 
@@ -1750,7 +1776,7 @@ function openModal(){
   editingId=null;fSites=[];fPersons=defaultPerson?[defaultPerson]:[];fProjects=defaultLabel?[defaultLabel]:[];fActions=[];fLinks=[];modalAttachments=[];renderAttachPreview('modal');renderModalLinks();
   document.getElementById('modalTitle').textContent='+ Task';
   document.getElementById('fTitle').value='';document.getElementById('fNote').value='';
-  document.getElementById('fPriority').value='none';document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('fPriority').value='none';document.getElementById('fDate').value=todayStr();
   renderModalChips();document.getElementById('taskOverlay').classList.remove('hidden');
   // Restore draft if available
   try{
@@ -1878,7 +1904,7 @@ function openRichEditor(id){
     document.getElementById('richTitle').value='';
     document.getElementById('richBody').innerText='';
     document.getElementById('richPriority').value='none';
-    document.getElementById('richDate').value=new Date().toISOString().slice(0,10);
+    document.getElementById('richDate').value=todayStr();
     rSites=[];rPersons=defaultPerson?[defaultPerson]:[];rProjects=defaultLabel?[defaultLabel]:[];rActions=[];rLinks=[];richAttachments=[];renderAttachPreview('rich');renderRichLinks();
     document.getElementById('richTaskStatus').textContent='Draft \u2014 not saved yet';
     try{
@@ -2151,6 +2177,49 @@ async function resetTodayFocus(){
   showToast('Today list reset ✓');
 }
 
+// The markup has always emitted these three handlers; they were never implemented, so
+// dragging a Today item raised a ReferenceError. Native HTML5 drag, no library needed.
+var todayDragIdx=null;
+function todayDragStart(e,i){
+  todayDragIdx=i;
+  if(e.dataTransfer){
+    e.dataTransfer.effectAllowed='move';
+    try{e.dataTransfer.setData('text/plain',String(i));}catch(err){}
+  }
+  var row=e.target&&e.target.closest?e.target.closest('.today-item'):null;
+  if(row)row.classList.add('dragging');
+}
+function todayDragOver(e){
+  e.preventDefault();
+  if(e.dataTransfer)e.dataTransfer.dropEffect='move';
+  var row=e.target&&e.target.closest?e.target.closest('.today-item'):null;
+  if(row&&!row.classList.contains('drag-over')){
+    var prev=document.querySelector('.today-item.drag-over');
+    if(prev)prev.classList.remove('drag-over');
+    row.classList.add('drag-over');
+  }
+}
+function todayDragEnd(){
+  todayDragIdx=null;
+  Array.prototype.forEach.call(
+    document.querySelectorAll('.today-item.dragging,.today-item.drag-over'),
+    function(el){el.classList.remove('dragging');el.classList.remove('drag-over');});
+}
+function todayDrop(e,i){
+  e.preventDefault();
+  var from=todayDragIdx;
+  if(from===null&&e.dataTransfer){
+    var raw=e.dataTransfer.getData('text/plain');
+    if(raw!=='')from=parseInt(raw,10);
+  }
+  todayDragEnd();
+  if(from===null||isNaN(from)||from===i)return;
+  if(from<0||from>=todayFocus.length||i<0||i>=todayFocus.length)return;
+  var moved=todayFocus.splice(from,1)[0];
+  todayFocus.splice(i,0,moved);
+  saveTodayFocus();
+}
+
 function moveTodayItem(i, dir){
   const j = i + dir;
   if(j<0||j>=todayFocus.length)return;
@@ -2199,7 +2268,7 @@ function renderTodayFocus(){
     var tags=(t.sites||[]).map(function(s){return '<span class="itag itag-s">'+escHtml(s)+'</span>';}).join('')
       +(t.persons||[]).map(function(p){return '<span class="itag itag-p">'+escHtml(p)+'</span>';}).join('')
       +(t.tags||[]).map(function(g){return '<span class="itag itag-t">'+escHtml(g)+'</span>';}).join('');
-    return '<div class="today-item'+(item.done?' done-today':'')+'" draggable="true" data-idx="'+i+'" ondragstart="todayDragStart(event,'+i+')" ondragover="todayDragOver(event)" ondrop="todayDrop(event,'+i+')">'
+    return '<div class="today-item'+(item.done?' done-today':'')+'" draggable="true" data-idx="'+i+'" ondragstart="todayDragStart(event,'+i+')" ondragover="todayDragOver(event)" ondrop="todayDrop(event,'+i+')" ondragend="todayDragEnd()">'
       
       +'<div class="today-item-check'+(item.done?' checked':'')+'" onclick="toggleTodayItemDone('+i+')"></div>'
       +'<div style="flex:1;min-width:0;">'
@@ -2326,7 +2395,7 @@ async function removePerson(i){persons.splice(i,1);await db.collection('meta').d
 async function addProjectTask(){const v=document.getElementById('newProjectInput').value.trim();if(!v||projectTasks.includes(v))return;projectTasks.push(v);document.getElementById('newProjectInput').value='';await db.collection('meta').doc('projectTasks').set({list:projectTasks});renderSettingsLists();}
 async function removeProjectTask(i){projectTasks.splice(i,1);await db.collection('meta').doc('projectTasks').set({list:projectTasks});renderSettingsLists();renderFilterPanel();}
 
-function exportData(){const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({tasks,sites,persons,projectTasks},null,2));a.download='workboard-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();showToast('Exported ✓');}
+function exportData(){const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({tasks,sites,persons,projectTasks},null,2));a.download='workboard-backup-'+todayStr()+'.json';a.click();showToast('Exported ✓');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
 // -- DETAIL MODAL --
@@ -2392,7 +2461,7 @@ function openDetail(elOrId) {
     body += '<div class="detail-attachments">';
     atts.forEach((a, i) => {
       if (a.type && a.type.startsWith('image/')) {
-        body += '<img class="task-attach-img" src="'+a.data+'" alt="'+escHtml(a.name)+'" onclick="showTaskAttachLightbox(\"'+id+'\",'+i+')" style="width:80px;height:60px;">';
+        body += '<img class="task-attach-img" src="'+a.data+'" alt="'+escHtml(a.name)+'" onclick="showTaskAttachLightbox(\''+id+'\','+i+')" style="width:80px;height:60px;">';
       } else {
         body += '<a class="task-attach-file" href="'+a.data+'" download="'+escHtml(a.name)+'">📄 '+escHtml(a.name)+'</a>';
       }
@@ -2522,7 +2591,9 @@ function toggleDoneFromDetail() {
   if (!detailTaskId) return;
   const t = tasks.find(x => x.id === detailTaskId);
   if (!t) return;
-  db.collection('tasks').doc(detailTaskId).update({done: !t.done}).then(() => {
+  const hist = JSON.parse(JSON.stringify(t.history || []));
+  hist.push({type: !t.done ? 'completed' : 'reopened', time: Date.now()});
+  db.collection('tasks').doc(detailTaskId).update({done: !t.done, history: hist}).then(() => {
     const check = document.getElementById('detailCheck');
     const updated = !t.done;
     check.className = 'check-box' + (updated ? ' checked' : '');
@@ -2842,8 +2913,6 @@ async function confirmMerge(){
 
 // -- ATTACHMENTS --
 let modalAttachments = []; // {name, type, data (base64), size}
-let modalAutoSaveTimer = null;
-let modalDraftId = null;
 let richAttachments = [];
 
 const MAX_FILE_SIZE = 500 * 1024; // 500KB
@@ -2980,7 +3049,12 @@ document.addEventListener('keydown',e=>{
     if(!document.getElementById('mergePickerOverlay').classList.contains('hidden')){closeMergePicker();return;}
     closeModal();closeDetail();
   }
-  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openModal();}
+  if((e.metaKey||e.ctrlKey)&&(e.key||'').toLowerCase()==='k'){
+    e.preventDefault();
+    if(e.shiftKey){openModal();return;}          // Ctrl+Shift+K: new task
+    var se=document.getElementById('searchInput'); // Ctrl+K: search, as the placeholder says
+    if(se){showPage('board');se.focus();se.select();}
+  }
 });
 // Task modal does not close on background click to prevent accidental data loss
 document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('detailOverlay'))closeDetail();});
