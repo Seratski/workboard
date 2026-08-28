@@ -729,17 +729,26 @@ is ever added.
   `if request.auth != null` would expose the whole board to any Google account. The rules
   must pin to the owner's UID — see `firestore.rules`, which is the committed record of
   intent, not the deployed artifact (rules are published from the Firebase console).
-- **No test suite, no staging.** `main` is production.
-- **`renderAll()` re-renders everything** on every snapshot, and card HTML is built by
-  string concatenation. Fine at current scale; the obvious bottleneck later.
+- **No staging.** `main` is production, and the deployed app talks to the live Firestore
+  immediately. There *is* a test suite — 287 pure-logic and 508 headless-browser assertions
+  in `NCS Projects\WorkBoard Claude\tests` — but nothing enforces it: no CI, no pre-push
+  hook. It runs when someone runs it.
+- **Card HTML is built by string concatenation** and lists are replaced wholesale rather
+  than diffed. `renderAll()` coalesces into one animation frame and `setHtml` skips
+  unchanged markup, which is enough at this scale — a no-op snapshot writes nothing. What
+  it does *not* do is update a single row: any real change rebuilds that whole list. Fine
+  for 43 tasks; the obvious bottleneck if the board ever gets large.
 - **Dates are compared as `YYYY-MM-DD` strings**, built from local time by `todayStr()`.
   Do not reach for `toISOString().slice(0,10)` — that is UTC, and it used to make "today"
   and "overdue" wrong between midnight and 02:00 Nordic summer time.
-- **Deletion is soft, restore is not identity-preserving.** Restoring from Trash creates a
-  new document with a new id, so a merge cannot be truly undone and a Today pin aimed at the
-  old id will not follow. Importing a backup does preserve ids — see *Backup: export and
-  import*.
-- **Trash never expires.** It grows until emptied by hand.
+- **Deletion is soft, and restore keeps the id.** Restoring from Trash writes the task back
+  under its `originalId`, so a Today pin aimed at that id follows it home; it falls back to
+  a new id only when the old one is occupied. Importing a backup also preserves ids. A merge
+  still cannot be *truly* undone, though: restoring B does not take its content back out of
+  A.
+- **Trash does not expire on its own**, deliberately — it is the undo buffer. Each entry
+  shows its age and one button clears everything older than 30 days, but that is a click,
+  not a schedule.
 
 ---
 
