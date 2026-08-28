@@ -545,6 +545,15 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .task-link-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.25);border-radius:10px;font-size:11px;color:#7aadff;text-decoration:none;font-family:var(--mono);}
 .task-link-chip:hover{background:rgba(79,142,247,0.18);border-color:var(--accent);}
 .detail-links{display:flex;flex-wrap:wrap;gap:6px;}
+.task-link-chip.is-mail{background:rgba(155,127,232,0.12);border-color:rgba(155,127,232,0.32);color:#c0a9ff;}
+.detail-link-row{display:flex;align-items:center;gap:6px;}
+.detail-link-row .detail-link-btn{flex:1;min-width:0;}
+.detail-link-btn span.dl-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.detail-link-del{background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:7px;width:28px;height:28px;flex-shrink:0;cursor:pointer;font-size:12px;font-family:var(--font);}
+.detail-link-del:hover{border-color:var(--red);color:var(--red);}
+.detail-addlink{display:flex;gap:6px;margin-top:8px;}
+.detail-addlink input{flex:1;min-width:0;}
+.link-item-url{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .detail-link-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;font-size:13px;color:var(--accent);text-decoration:none;transition:all .12s;}
 .detail-link-btn:hover{border-color:var(--accent);background:var(--accent-glow);}
 .detail-comment-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;resize:none;min-height:60px;transition:border-color .15s;}
@@ -1748,7 +1757,7 @@ function taskHTML(t){
         +(t.done?'':'<button class="pin-btn'+(isPinned?' pinned':'')+'" data-tid="'+t.id+'" onclick="event.stopPropagation();pinTodayClick(this)" title="'+(isPinned?'In Today list':'Add to Today')+'">📌</button>')
       +'</div>'
       +(tags||t.date||pausedChip||repeatChip||cuChip||(t.links&&t.links.length)||(t.comments&&t.comments.length)?'<div class="task-tags-row">'+tags
-      +pausedChip+repeatChip+cuChip+((t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'')+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'" >'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+(t.links&&t.links.length?t.links.map(function(l){return '<a class="task-link-chip" href="'+escHtml(l.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 '+escHtml(l.name)+'</a>';}).join(''):'')+'</div>':'')
+      +pausedChip+repeatChip+cuChip+((t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'')+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'" >'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+(t.links&&t.links.length?t.links.map(function(l){return '<a class="task-link-chip'+(isMailLink(l.url)?' is-mail':'')+'" href="'+escHtml(l.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">'+linkIcon(l)+' '+escHtml(linkLabel(l))+'</a>';}).join(''):'')+'</div>':'')
       +(t.note?'<div class="task-note-row" onclick="toggleNote(this)" title="Click to expand">'+escHtml(t.note)+'</div>':'')
       +actionBar
       +attachHTML(t)
@@ -1782,7 +1791,8 @@ function showTaskAttachLightbox(taskId, i) {
   if (!a) return;
   showLightboxFor(a);
 }
-function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // Values interpolated into an inline handler sit inside BOTH a JS string and an HTML
 // attribute, so both layers need escaping. JS first, then HTML, or the ampersands of the
 // HTML entities would themselves get escaped.
@@ -1999,23 +2009,94 @@ function renderActionItems(){
   }).join('');
 }
 // -- LINKS --
+// A mail link is any Outlook/OWA URL. They get their own icon so a thread you have to go
+// back and read is distinguishable from an ordinary reference link at a glance.
+function isMailLink(url){
+  // The lookahead matters: without a host boundary, outlook.office365.com.evil.example
+  // would match and a phishing link would be shown with a friendly mail icon.
+  return /^https?:\/\/(?:[a-z0-9-]+\.)*(?:outlook\.(?:office|office365|live)\.com|outlook\.com)(?=[\/?#:]|$)/i.test(url||'');
+}
+function linkIcon(l){return isMailLink(l&&l.url)?'\uD83D\uDCE7':'\uD83D\uDD17';}
+
+// Turns one pasted string into {name, url}, or null if there is no link in it.
+//
+// Accepts a bare URL; "Label | URL"; and "Label <URL>" with no separator at all, because
+// the first token that looks like a URL is taken as the URL and whatever stands in front
+// of it becomes the label. So all of these work as a single paste:
+//   https://outlook.office365.com/owa/?ItemID=...
+//   Anna | https://outlook.office365.com/owa/?ItemID=...
+//   Anna \u00b7 Returflow SOP  https://outlook.office365.com/owa/?ItemID=...
+//
+// Refusing is better than guessing: text with no URL-shaped token in it returns null
+// rather than storing a nonsense link like https://Harmless.
+//
+// Only http, https and mailto get through. A javascript: or data: URL in an href is a
+// script-execution hole, and this page renders task data straight into markup.
+function parseLinkInput(raw,fallbackName){
+  // Keep tab and newline -- they are separators here. Strip the other control characters.
+  var text=String(raw==null?'':raw)
+    .replace(/\r\n?/g,'\n')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,' ')
+    .trim();
+  if(!text)return null;
+
+  var looksLikeUrl=function(tk){
+    return /^(?:https?|mailto):/i.test(tk)
+        || /^[^\s:]+\.[a-z]{2,}(?:[\/?#:]|$)/i.test(tk);
+  };
+  // Returns [label, url] for a string, or null when it holds no URL-shaped token.
+  var pick=function(str){
+    var tokens=str.split(/\s+/).filter(Boolean);
+    for(var i=0;i<tokens.length;i++){
+      if(looksLikeUrl(tokens[i]))return [tokens.slice(0,i).join(' '),tokens[i]];
+    }
+    return null;
+  };
+
+  var name='', url='';
+  var bar=text.indexOf('|');
+  var found=null;
+  if(bar>0){
+    found=pick(text.slice(bar+1));
+    // Only treat the bar as a separator if a URL actually follows it; a pipe can also
+    // appear unencoded inside a URL.
+    if(found){name=text.slice(0,bar).trim();url=found[1];}
+  }
+  if(!url){
+    found=pick(text);
+    if(!found)return null;
+    name=found[0];
+    url=found[1];
+  }
+
+  if(/^[a-z][a-z0-9+.-]*:/i.test(url)){
+    if(!/^(?:https?|mailto):/i.test(url))return null;
+  } else {
+    url='https://'+url;
+  }
+  if(!/^mailto:.+/i.test(url)&&!/^https?:\/\/[^\/?#\s]+/i.test(url))return null;
+
+  name=(name||String(fallbackName||'')).trim();
+  if(!name)name=isMailLink(url)?'Mail':url;
+  return {name:name.slice(0,120),url:url};
+}
+function linkLabel(l){return (l&&l.name)||(l&&l.url)||'';}
 let fLinks=[], rLinks=[];
 
 function renderModalLinks(){
   document.getElementById('modalLinksList').innerHTML=fLinks.map(function(l,i){
     return '<div class="link-item-row">'
-      +'<span class="link-item-name">🔗 '+escHtml(l.name)+'</span>'
-      +'<span class="link-item-url">'+escHtml(l.url)+'</span>'
+      +'<span class="link-item-name">'+linkIcon(l)+' '+escHtml(l.name)+'</span>'
+      +'<span class="link-item-url" title="'+escHtml(l.url)+'">'+escHtml(l.url)+'</span>'
       +'<button class="link-item-del" onclick="removeModalLink('+i+')">✕</button>'
       +'</div>';
   }).join('');
 }
 function addModalLink(){
-  var name=document.getElementById('modalLinkName').value.trim();
-  var url=document.getElementById('modalLinkUrl').value.trim();
-  if(!url)return;
-  if(!url.startsWith('http'))url='https://'+url;
-  fLinks.push({name:name||url,url:url});
+  var entry=parseLinkInput(document.getElementById('modalLinkUrl').value,
+                           document.getElementById('modalLinkName').value);
+  if(!entry){showToast('That is not a link I can store');return;}
+  fLinks.push(entry);
   document.getElementById('modalLinkName').value='';
   document.getElementById('modalLinkUrl').value='';
   renderModalLinks();
@@ -2025,18 +2106,17 @@ function removeModalLink(i){fLinks.splice(i,1);renderModalLinks();}
 function renderRichLinks(){
   document.getElementById('richLinksList').innerHTML=rLinks.map(function(l,i){
     return '<div class="link-item-row">'
-      +'<span class="link-item-name">🔗 '+escHtml(l.name)+'</span>'
-      +'<span class="link-item-url">'+escHtml(l.url)+'</span>'
+      +'<span class="link-item-name">'+linkIcon(l)+' '+escHtml(l.name)+'</span>'
+      +'<span class="link-item-url" title="'+escHtml(l.url)+'">'+escHtml(l.url)+'</span>'
       +'<button class="link-item-del" onclick="removeRichLink('+i+')">✕</button>'
       +'</div>';
   }).join('');
 }
 function addRichLink(){
-  var name=document.getElementById('richLinkName').value.trim();
-  var url=document.getElementById('richLinkUrl').value.trim();
-  if(!url)return;
-  if(!url.startsWith('http'))url='https://'+url;
-  rLinks.push({name:name||url,url:url});
+  var entry=parseLinkInput(document.getElementById('richLinkUrl').value,
+                           document.getElementById('richLinkName').value);
+  if(!entry){showToast('That is not a link I can store');return;}
+  rLinks.push(entry);
   document.getElementById('richLinkName').value='';
   document.getElementById('richLinkUrl').value='';
   renderRichLinks();richAutoSave();
@@ -3608,6 +3688,33 @@ function openDetail(elOrId) {
     body += '</div></div>';
   }
 
+  // -- LINKS --
+  // Always rendered, even with no links, because the add row is the point: pasting a link
+  // onto an existing task should not mean opening it for edit.
+  {
+    var links = t.links || [];
+    body += '<div class="detail-section">'
+      + '<div class="detail-section-label">Links' + (links.length ? ' (' + links.length + ')' : '') + '</div>'
+      + '<div class="detail-links" style="flex-direction:column;align-items:stretch;">'
+      + links.map(function (l, i) {
+          return '<div class="detail-link-row">'
+            + '<a class="detail-link-btn" href="' + escHtml(l.url) + '" target="_blank" rel="noopener" title="' + escHtml(l.url) + '">'
+              + linkIcon(l) + ' <span class="dl-name">' + escHtml(linkLabel(l)) + '</span>'
+            + '</a>'
+            + '<button class="detail-link-del" onclick="removeDetailLink(' + i + ')" title="Remove this link">\u2715</button>'
+          + '</div>';
+        }).join('')
+      + '</div>'
+      + '<div class="detail-addlink">'
+        + '<input class="form-input" id="detailLinkInput" placeholder="Paste a link \u2014 or Label | https://\u2026" />'
+        + '<button class="btn btn-ghost btn-sm" onclick="addDetailLink()">+ Add</button>'
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--text3);margin-top:5px;">'
+        + 'An Outlook mail link is recognised and labelled \uD83D\uDCE7 Mail. Paste "Label | URL" to name it in one go.'
+      + '</div>'
+    + '</div>';
+  }
+
   // -- COMMENTS --
   const comments = t.comments || [];
   body += '<div class="detail-section">';
@@ -3680,6 +3787,51 @@ async function addComment() {
   await db.collection('tasks').doc(detailTaskId).update({comments: comments});
   showToast('Comment added ✓');
   openDetail(detailTaskId);
+}
+
+async function addDetailLink(){
+  var input=document.getElementById('detailLinkInput');
+  if(!input||!detailTaskId)return;
+  var t=tasks.find(function(x){return x.id===detailTaskId;});
+  if(!t)return;
+  var entry=parseLinkInput(input.value);
+  if(!entry){showToast('That is not a link I can store');return;}
+  var links=JSON.parse(JSON.stringify(t.links||[]));
+  if(links.some(function(l){return l.url===entry.url;})){showToast('That link is already here');return;}
+  links.push(entry);
+  var id=detailTaskId;
+  try{
+    await db.collection('tasks').doc(id).update({
+      links:links,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    t.links=links;
+    showToast((isMailLink(entry.url)?'Mail linked':'Link added')+' \u2713');
+    openDetail(id);
+  }catch(e){
+    showToast('Could not add the link: '+(e.code||e.message||'error'));
+  }
+}
+
+async function removeDetailLink(i){
+  if(!detailTaskId)return;
+  var t=tasks.find(function(x){return x.id===detailTaskId;});
+  if(!t)return;
+  var links=JSON.parse(JSON.stringify(t.links||[]));
+  if(i<0||i>=links.length)return;
+  var gone=links.splice(i,1)[0];
+  var id=detailTaskId;
+  try{
+    await db.collection('tasks').doc(id).update({
+      links:links,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    t.links=links;
+    showToast('Removed '+linkLabel(gone).slice(0,40)+' \u2713');
+    openDetail(id);
+  }catch(e){
+    showToast('Could not remove the link: '+(e.code||e.message||'error'));
+  }
 }
 
 function formatDateFull(d) {
@@ -4479,6 +4631,9 @@ document.getElementById('richProjectInput').addEventListener('keydown',e=>{
 });
 document.getElementById('richProjectTagWrap').addEventListener('click',()=>document.getElementById('richProjectInput').focus());
 document.getElementById('richActionText').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addRichAction();}});
+document.getElementById('detailOverlay').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target&&e.target.id==='detailLinkInput'){e.preventDefault();addDetailLink();}
+});
 document.getElementById('modalLinkUrl').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addModalLink();}});
 document.getElementById('richLinkUrl').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addRichLink();}});
 document.getElementById('richDate').addEventListener('change',richAutoSave);

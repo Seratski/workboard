@@ -101,7 +101,7 @@ the same change as the collection; without it every attachment write returns
 | `persons` | string[] | |
 | `tags` | string[] | **Labels are stored under `tags`.** The UI says "Labels", the settings doc says `projectTasks`, the task field says `tags`. Three names, one concept. |
 | `actions` | `[{text, assignee, done}]` | Checklist. `assignee` is a plain name string. |
-| `links` | `[{name, url}]` | `https://` prefixed automatically if missing. |
+| `links` | `[{name, url}]` | Parsed by `parseLinkInput`, which allows only `http`, `https` and `mailto` and adds `https://` when the scheme is missing. An Outlook URL is recognised as a mail link and shown with an envelope. |
 | `attachments` | `[{id, name, type, size, thumb}]` | References into `attachments/{id}`, plus a small JPEG thumbnail so the board renders without extra reads. Entries written before August 2026 instead hold `{name, type, size, data}` with the full base64 inline; both forms are read correctly. |
 | `comments` | `[{text, time}]` | `time` is `Date.now()` ms, not a Firestore timestamp. |
 | `history` | `[{type, time}]` | `type` ∈ `created`, `edited`, `completed`, `reopened`, `merged`, `repeated`. |
@@ -220,7 +220,8 @@ meanings, two different counts on screen at once.
 
 ### Board view modes
 
-- **list** (`taskHTML`) — the full-detail row: stripe, checkbox, tags, links, note, action progress, attachments.
+- **list** (`taskHTML`) — the full-detail row: stripe, checkbox, tags, links (mail links in
+  their own colour), note, action progress, attachments.
 - **grid** (`taskCardHTML`) — compact cards: stripe, title, note preview, tags, date,
   action progress and an attachment count. Deliberately no per-card checkbox or edit
   buttons — clicking the card opens the detail modal, which has both. That markup used to
@@ -456,6 +457,45 @@ silently. Excluding B's attachments is the escape hatch.
 If B was pinned in Today focus, the pin is moved to A rather than left pointing at a
 deleted document. The trash copy of B carries `mergedInto: <A's id>` alongside the usual
 `originalId`, so a merge is distinguishable from a plain delete.
+
+### Links, and mail links
+
+Links live on the task as `links: [{name, url}]` and are added in three places: the quick
+modal, the note editor, and — since August 2026 — **the detail modal**, which is the one
+that matters in practice, because pasting a URL onto an existing task used to mean opening
+it for edit. The detail modal's Links section renders every link with a remove button and
+an add field, and is shown even when the task has no links, since the add field is the
+point.
+
+`parseLinkInput(raw, fallbackName)` turns one pasted string into `{name, url}` or `null`:
+
+- **Only `http`, `https` and `mailto` get through.** A `javascript:` or `data:` URL inside
+  an `href` is a script-execution hole, and this page renders task data straight into
+  markup. A scheme-less input gets `https://`.
+- It accepts a bare URL, `Label | URL`, `Label<tab>URL`, `Label\nURL`, and **no separator at
+  all** — the first whitespace-separated token that looks like a URL is the URL, and
+  whatever stands in front of it becomes the label. So `Anna · Returflow SOP <url>` works
+  as a single paste, which is what you get when you ask for a label and a link together.
+- **It refuses rather than guesses.** Text with no URL-shaped token returns `null`. An
+  earlier version took the first token unconditionally and turned
+  `Harmless label | javascript:alert(1)` into `https://Harmless`.
+
+`isMailLink(url)` matches Outlook and OWA hosts — `outlook.office.com`,
+`outlook.office365.com`, `outlook.live.com`, `outlook.com` — and mail links get an envelope
+icon and their own chip colour instead of the chain. The trailing `(?=[\/?#:]|$)` lookahead
+is load-bearing: without a host boundary, `outlook.office365.com.evil.example` would match
+and a phishing URL would be displayed with a friendly mail icon.
+
+`escHtml` escapes `"` and `'` as well as `&`, `<` and `>`. It is used inside
+`href="…"`, `alt="…"` and `title="…"`, so without the quotes a crafted URL could close the
+attribute and add another one. That was live until August 2026. `esc()` is the different
+one, for values interpolated into inline `onclick` handlers.
+
+There is no way to attach a mail *itself*. The practical routes are a link (best — one
+click reaches the real thread), the mail's text pasted into a note (`handleRichPaste`
+deliberately inserts `text/plain`), a PDF print-out as an attachment, or a screenshot
+pasted while the quick modal or note editor is open. Attachments are capped at 700 KB per
+file and accept `image/*` and `.pdf` only.
 
 ### Handing a task to ClickUp
 

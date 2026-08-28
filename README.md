@@ -105,6 +105,22 @@ behind. Nothing is scheduled server-side.
 August 2026 — it used to require a task to carry every selected value at once, which meant
 picking two sites usually returned nothing.
 
+## Links, and mail from Outlook
+
+Open a task and paste a URL into the **Links** field — no need to open it for edit. An
+Outlook or OWA link is recognised and labelled **📧 Mail**, with its own colour on the
+task row, so a thread you have to go back and read stands out from an ordinary reference.
+
+You can name it in the same paste: `Anna · Returflow SOP | https://outlook…`, or without the
+bar at all — anything in front of the URL becomes the label. Only `http`, `https` and
+`mailto` links are accepted, and text with no URL in it is refused rather than guessed at.
+
+There is no way to store a mail itself. In order of usefulness: **link to it** (one click
+reaches the real thread, with its attachments and the rest of the conversation); paste the
+mail's text into a note (formatting is dropped on purpose); print it to PDF and attach the
+PDF; or snip it with Win+Shift+S and paste the image while the task modal or note editor is
+open. Attachments are capped at 700 KB each and accept images and PDFs.
+
 ## Sending a task to ClickUp
 
 **Detail modal → 📤 ClickUp.** Pick an Area, and the dialog hands you the two things
@@ -167,5 +183,9 @@ Fixed in August 2026 and described in ARCHITECTURE.md:
 - Grid cards emitted a checkbox and edit buttons that CSS hid with no hover rule — rendered,
   never reachable. The markup is gone; the card opens the detail modal, which has both.
 - A merge silently dropped the surviving task's repeat rule.
+- `escHtml` did not escape quotes, although it is used inside `href` and `alt` attributes,
+  so a crafted link URL could have added an attribute of its own.
+- Links could only be added by opening a task for edit; the detail modal had the CSS for a
+  Links section but never rendered one.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.
