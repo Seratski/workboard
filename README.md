@@ -154,6 +154,13 @@ be added here too.
 
 ## Backup and restore
 
+**This board is the only copy of its data.** Nothing backs it up on a schedule — a static
+page cannot — so WorkBoard records when you last exported and says so on the board after two
+weeks, in red after a month. Settings shows the date next to the Export button. One click
+resets it.
+
+
+
 **Settings → Data backup.** Export writes one JSON file containing tasks, trash, sites,
 people, labels, defaults and the Today list. Import reads it back, shows exactly what will
 change, and only then writes — in one of two modes: *Add missing only*, which touches
@@ -162,6 +169,10 @@ and deletes what is not in it (two clicks required).
 
 Tasks and attachment payloads are restored under their original ids, so an import is
 idempotent and safe to re-run. Older backup formats still load.
+
+Restoring a single task from **Trash** also puts it back under its original id, so a pinned
+Today item still points at it. Trash does not expire by itself — it is the undo buffer — but
+each entry shows its age and one button clears everything older than 30 days.
 
 ## Known defects
 
@@ -207,5 +218,14 @@ Fixed in August 2026 and described in ARCHITECTURE.md:
 - Editing a task that had a formatted note through the small edit box saved the change to a
   field the app never displays, so the edit vanished from view. Edit now opens the editor
   that matches the task.
+- The Today page showed the pinned count or the due-today count in the same field, whichever
+  rendered last, and the "Due today" heading's own count was never filled.
+- The pinned Today list showed the title and done flag copied when the task was pinned, so a
+  rename or a completion elsewhere never reached it.
+- One page load performed four complete re-renders of every list, and every later snapshot
+  replaced all fourteen lists whether anything had changed or not. Now: one render per
+  frame, and nothing written when nothing changed.
+- Restoring from Trash created a new document, orphaning anything that pointed at the old id.
+- A floating action button had CSS and three lookups but no element.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.

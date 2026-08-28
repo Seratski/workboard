@@ -391,7 +391,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .cu-pre{font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;resize:vertical;min-height:190px;}
 .cu-step{font-size:11px;color:var(--text3);margin-bottom:5px;}
 .task-paused-chip{font-size:10px;font-family:var(--mono);color:var(--teal);background:rgba(34,196,172,0.12);border:1px solid rgba(34,196,172,0.3);border-radius:5px;padding:1px 5px;}
-.fab{display:none;position:fixed;bottom:66px;right:16px;z-index:100;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(249,103,0,0.4);align-items:center;justify-content:center;}
 
 .toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:9px 15px;font-size:13px;color:var(--text);z-index:500;animation:slideUp .2s ease;display:none;max-width:calc(100vw - 40px);}
 .toast.show{display:block;}
@@ -412,7 +411,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
   .top-right .btn,.top-right .user-chip span{display:none;}
 
   /* NAVIGATION */
-  .fab{display:none!important;}
 
   /* BOARD */
   .board-layout{grid-template-columns:1fr!important;padding:12px 12px 12px;}
@@ -470,7 +468,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 
 /* Extra small screens */
 @media(max-width:380px){
-  .fab{width:46px;height:46px;font-size:20px;bottom:64px;}
   .bottom-nav{height:52px;}
   .bottom-nav-item{font-size:9px;}
   .bottom-nav-item .bni{font-size:16px;}
@@ -545,6 +542,13 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .task-link-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.25);border-radius:10px;font-size:11px;color:#7aadff;text-decoration:none;font-family:var(--mono);}
 .task-link-chip:hover{background:rgba(79,142,247,0.18);border-color:var(--accent);}
 .detail-links{display:flex;flex-wrap:wrap;gap:6px;}
+.backup-nag{display:none;align-items:center;gap:10px;margin:0 0 12px;padding:9px 12px;background:rgba(255,225,0,0.08);border:1px solid rgba(255,225,0,0.28);border-radius:9px;font-size:12px;color:var(--text2);}
+.backup-nag.show{display:flex;}
+.backup-nag.stale{background:rgba(255,57,39,0.09);border-color:rgba(255,57,39,0.3);}
+.backup-nag-text{flex:1;min-width:0;}
+.backup-nag-x{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;}
+.backup-nag-x:hover{color:var(--text);}
+.backup-when{font-size:11px;color:var(--text3);font-family:var(--mono);}
 .expand-note{float:right;background:transparent;border:none;color:var(--accent);font-family:var(--font);font-size:11px;font-weight:500;cursor:pointer;padding:0;text-transform:none;letter-spacing:0;}
 .expand-note:hover{text-decoration:underline;}
 .task-link-chip.is-mail{background:rgba(155,127,232,0.12);border-color:rgba(155,127,232,0.32);color:#c0a9ff;}
@@ -993,6 +997,12 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
             <input id="searchInput" placeholder="Search… (Ctrl+K)" oninput="renderTasks()" />
           </div>
         </div>
+        <div class="backup-nag" id="backupNag">
+          <span>⚠</span>
+          <span class="backup-nag-text" id="backupNagText"></span>
+          <button class="btn btn-ghost btn-sm" onclick="exportData()">↓ Export now</button>
+          <button class="backup-nag-x" onclick="dismissBackupNag()" title="Hide until next time WorkBoard is opened">✕</button>
+        </div>
         <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ Task" above.</p></div></div>
       </div>
       <!-- TODAY FOCUS PANEL -->
@@ -1193,7 +1203,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       </div>
       <div class="settings-card">
         <div class="settings-card-title">Data backup</div>
-        <div class="settings-card-sub">Download everything as one JSON file, or restore from one.</div>
+        <div class="settings-card-sub">Download everything as one JSON file, or restore from one.
+          Last backup: <span class="backup-when" id="backupWhen">—</span></div>
         <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export backup</button>
           <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFileInput').click()">⬆ Import backup</button>
@@ -1218,6 +1229,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
         <div class="settings-card-title">🗑 Trash</div>
         <div class="settings-card-sub">Recently deleted tasks. Restore or permanently delete.</div>
         <div class="settings-list" id="trashList" style="max-height:240px;"></div>
+        <div id="trashOldRow" style="margin-top:8px;"></div>
         <button class="btn btn-danger btn-sm" style="margin-top:8px;" onclick="emptyTrash()">Empty trash permanently</button>
       </div>
       <div class="settings-card">
@@ -1270,7 +1282,6 @@ function handleUser(user){
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('loadingScreen').classList.remove('hidden');
     document.getElementById('appShell').style.display='flex';
-    const fabEl=document.getElementById('fab');if(fabEl)fabEl.style.display='flex';
 
     const av=document.getElementById('userAvatar');
     if(user.photoURL)av.innerHTML='<img src="'+user.photoURL+'">';
@@ -1284,7 +1295,6 @@ function handleUser(user){
     document.getElementById('loginScreen').classList.remove('hidden');
     document.getElementById('loadingScreen').classList.add('hidden');
     document.getElementById('appShell').style.display='none';
-    const fabEl2=document.getElementById('fab');if(fabEl2)fabEl2.style.display='none';
     // Release every listener, including the lazy ones, and clear the handles so their
     // start guards do not block a later sign-in from re-attaching them.
     [unsubTasks,unsubSites,unsubPersons,unsubProjects,unsubSettings,unsubTodayFocus,unsubTrash]
@@ -1330,14 +1340,60 @@ function startListeners(){
   unsubProjects=db.collection('meta').doc('projectTasks').onSnapshot(doc=>{if(doc.exists&&doc.data().list)projectTasks=doc.data().list;renderAll();});
   startTodayFocusListener();
   unsubSettings=db.collection('meta').doc('settings').onSnapshot(doc=>{
-    if(doc.exists){defaultLabel=doc.data().defaultLabel||'';defaultPerson=doc.data().defaultPerson||'';}
+    if(doc.exists){
+      defaultLabel=doc.data().defaultLabel||'';
+      defaultPerson=doc.data().defaultPerson||'';
+      lastExportAt=doc.data().lastExportAt||'';
+    }
     renderDefaultLabelSelect();
     renderDefaultPersonSelect();
+    renderBackupNag();
   });
   setTimeout(()=>document.getElementById('loadingScreen').classList.add('hidden'),5000);
 }
 
-function renderAll(){renderFilterPanel();renderTasks();renderTodayList();renderPausedList();renderDoneList();renderSettingsLists();updateBadges();renderMobileFilterBar();const cnt=afS.length+afP.length+afT.length+afPr.length+(afOv?1:0);const btn=document.getElementById('bnav-filter');if(btn)btn.innerHTML='<span class="bni">⚡</span>'+(cnt?'Filter ('+cnt+')':'Filter');}
+// Assign only when the markup actually differs. Every list render goes through this.
+// Counters are for the tests: they prove a no-op snapshot writes nothing.
+let renderStats={requested:0,performed:0,htmlWrites:0,htmlSkips:0};
+function setHtml(idOrEl,html){
+  var el=(typeof idOrEl==='string')?document.getElementById(idOrEl):idOrEl;
+  if(!el)return false;
+  // Compare with what was last assigned, not with el.innerHTML: the browser normalises
+  // markup as it parses it, so the round-trip is not the string that went in.
+  if(el.__wbHtml===html){renderStats.htmlSkips++;return false;}
+  el.__wbHtml=html;
+  el.innerHTML=html;
+  renderStats.htmlWrites++;
+  return true;
+}
+function setText(idOrEl,text){
+  var el=(typeof idOrEl==='string')?document.getElementById(idOrEl):idOrEl;
+  if(!el||el.textContent===text)return false;
+  el.textContent=text;
+  return true;
+}
+
+// Coalesce: four listeners firing on one page load produce one render, not four.
+let renderPending=false;
+function renderAll(){
+  renderStats.requested++;
+  if(renderPending)return;
+  renderPending=true;
+  var run=function(){renderPending=false;renderAllNow();};
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(run);
+  else setTimeout(run,0);
+}
+
+// The synchronous version. Nothing in the app calls it directly -- every caller goes
+// through the coalescing renderAll -- but the tests need a render they can measure.
+function renderAllNow(){
+  renderStats.performed++;
+  renderFilterPanel();renderTasks();renderTodayList();renderTodayFocus();
+  renderPausedList();renderDoneList();renderSettingsLists();updateBadges();
+  renderMobileFilterBar();
+  const cnt=afS.length+afP.length+afT.length+afPr.length+(afOv?1:0);
+  setHtml('bnav-filter','<span class="bni">⚡</span>'+(cnt?'Filter ('+cnt+')':'Filter'));
+}
 
 function updateBadges(){
   const today=todayStr();
@@ -1427,15 +1483,15 @@ function renderMobileFilterBar(){
   const pEl = document.getElementById('mobPersonChips');
   const tEl = document.getElementById('mobLabelChips');
 
-  if (sEl) sEl.innerHTML = uS.map(function(s){
+  if (sEl) setHtml(sEl, uS.map(function(s){
     return '<button class="mob-filter-chip'+(afS.includes(s)?' active':'')+' " onclick="tF(\'s\',\''+esc(s)+'\')" >&#x25C8; '+s+'</button>';
-  }).join('');
-  if (pEl) pEl.innerHTML = uP.map(function(p){
+  }).join(''));
+  if (pEl) setHtml(pEl, uP.map(function(p){
     return '<button class="mob-filter-chip'+(afP.includes(p)?' active':'')+' " onclick="tF(\'p\',\''+esc(p)+'\')" >'+p+'</button>';
-  }).join('');
-  if (tEl) tEl.innerHTML = uT.map(function(t){
+  }).join(''));
+  if (tEl) setHtml(tEl, uT.map(function(t){
     return '<button class="mob-filter-chip'+(afT.includes(t)?' active':'')+' " onclick="tF(\'t\',\''+esc(t)+'\')" >'+t+'</button>';
-  }).join('');
+  }).join(''));
 }
 
 function cycleMobileSort(){
@@ -1460,7 +1516,6 @@ function showPage(p){
     const tab=document.getElementById('tab-'+x);if(tab)tab.classList.toggle('active',isActive);
     const bn=document.getElementById('bnav-'+x);if(bn)bn.classList.toggle('active',isActive);
   });
-  const fabEl3=document.getElementById('fab');if(fabEl3)fabEl3.style.display=p==='rich'?'none':'flex';
   if(p==='settings'){renderSettingsLists();startTrashListener();renderDefaultLabelSelect();renderDefaultPersonSelect();}
 }
 
@@ -1486,7 +1541,7 @@ function renderFilterPanel(){
     h+='</div></div>';
   }
   h+='<div class="filter-group"><span class="filter-group-label">Date</span><div class="filter-chips"><button class="fchip fpr '+(afOv?'on':'')+' " onclick="tF(\'ov\')">⚠ Overdue</button></div></div>';
-  document.getElementById('filterGroups').innerHTML=h;
+  setHtml('filterGroups',h);
 }
 function tF(type,val){
   if(type==='s'){const i=afS.indexOf(val);i>=0?afS.splice(i,1):afS.push(val);}
@@ -1561,20 +1616,20 @@ function renderTasks(){
   const sort=(document.getElementById('sortSelect')?.value)||'priority';
   const isGrouped=sort==='site'||sort==='person'||sort==='label';
   const f=isGrouped?allFiltered:getSorted(allFiltered);
-  document.getElementById('tasksCount').textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
+  setText('tasksCount',f.length?(f.length+' task'+(f.length!==1?'s':'')):'');
   const el=document.getElementById('taskList');
-  if(!f.length){el.className='';el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><p>No tasks found.</p></div>';return;}
+  if(!f.length){el.className='';setHtml(el,'<div class="empty"><div class="empty-icon">🔍</div><p>No tasks found.</p></div>');return;}
 
   if(viewMode==='kanban'){
     el.className='';
     const high=f.filter(t=>t.priority==='high');
     const med=f.filter(t=>t.priority==='medium');
     const other=f.filter(t=>t.priority!=='high'&&t.priority!=='medium');
-    el.innerHTML='<div class="kanban-board">'
+    setHtml(el,'<div class="kanban-board">'
       +'<div class="kanban-col kanban-col-high"><div class="kanban-col-head"><span class="kanban-col-title">🔴 High</span><span class="kanban-col-count">'+high.length+'</span></div><div class="kanban-cards">'+high.map(kanbanCardHTML).join('')+'</div></div>'
       +'<div class="kanban-col kanban-col-medium"><div class="kanban-col-head"><span class="kanban-col-title">🟡 Medium</span><span class="kanban-col-count">'+med.length+'</span></div><div class="kanban-cards">'+med.map(kanbanCardHTML).join('')+'</div></div>'
       +'<div class="kanban-col kanban-col-other"><div class="kanban-col-head"><span class="kanban-col-title">Other</span><span class="kanban-col-count">'+other.length+'</span></div><div class="kanban-cards">'+other.map(kanbanCardHTML).join('')+'</div></div>'
-      +'</div>';
+      +'</div>');
     return;
   }
 
@@ -1587,22 +1642,24 @@ function renderTasks(){
     const groups=getGrouped(f,groupBy);
     let h='';
     groups.forEach(g=>{h+=(viewMode==='grid'?gridSection(g.label,g.tasks.length):divider(g.label,g.tasks.length,true));h+=g.tasks.map(cardFn).join('');});
-    el.innerHTML=h;
+    setHtml(el,h);
   } else if(sort==='priority'){
     const high=f.filter(t=>t.priority==='high'),med=f.filter(t=>t.priority==='medium'),other=f.filter(t=>t.priority!=='high'&&t.priority!=='medium');
     let h='';
     if(high.length){h+=divFn('🔴 High priority',high.length);h+=high.map(cardFn).join('');}
     if(med.length){h+=divFn('🟡 Medium priority',med.length);h+=med.map(cardFn).join('');}
     if(other.length){if(high.length||med.length)h+=divFn('Other',other.length);h+=other.map(cardFn).join('');}
-    el.innerHTML=h;
+    setHtml(el,h);
   } else {
-    el.innerHTML=f.map(cardFn).join('');
+    setHtml(el,f.map(cardFn).join(''));
   }
 }
 function renderTodayList(){
   const f=getFiltered('today');
-  document.getElementById('todayCount').textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
-  document.getElementById('todayList').innerHTML=f.length?f.map(taskHTML).join(''):'<div class="empty"><div class="empty-icon">☀️</div><p>Nothing due today.</p></div>';
+  // #todayDueCount, not #todayCount: the latter belongs to the pinned "Today focus" list.
+  const dueEl=document.getElementById('todayDueCount');
+  if(dueEl)dueEl.textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
+  setHtml('todayList',f.length?f.map(taskHTML).join(''):'<div class="empty"><div class="empty-icon">☀️</div><p>Nothing due today.</p></div>');
 }
 function renderPausedList(){
   const f=getFiltered('paused').slice().sort(function(a,b){
@@ -1613,12 +1670,12 @@ function renderPausedList(){
   const el=document.getElementById('pausedList');
   if(!el)return;
   if(!f.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">⏸️</div><p>Nothing paused.<br>'
-      +'Open a task and choose Pause to put it aside until a date.</p></div>';
+    setHtml(el,'<div class="empty"><div class="empty-icon">⏸️</div><p>Nothing paused.<br>'
+      +'Open a task and choose Pause to put it aside until a date.</p></div>');
     return;
   }
   const sc={high:'stripe-high',medium:'stripe-medium',low:'stripe-low',none:'stripe-none'};
-  el.innerHTML=f.map(function(t){
+  setHtml(el,f.map(function(t){
     var tags=(t.sites||[]).map(function(x){return '<span class="itag itag-s">'+escHtml(x)+'</span>';}).join('')
       +(t.persons||[]).map(function(x){return '<span class="itag itag-p">'+escHtml(x)+'</span>';}).join('')
       +(t.tags||[]).map(function(x){return '<span class="itag itag-t">'+escHtml(x)+'</span>';}).join('');
@@ -1633,13 +1690,13 @@ function renderPausedList(){
       +'</div>'
       +'<button class="btn btn-ghost btn-sm" onclick="resumeTaskById(\''+t.id+'\')">\u25b6\ufe0f Resume</button>'
       +'</div>';
-  }).join('');
+  }).join(''));
 }
 
 function renderDoneList(){
   const f=getFiltered('done');
-  document.getElementById('doneCount').textContent=f.length?(f.length+' task'+(f.length!==1?'s':'')):'';
-  document.getElementById('doneList').innerHTML=f.length?f.map(taskHTML).join(''):'<div class="empty"><div class="empty-icon">✅</div><p>No completed tasks yet.</p></div>';
+  setText('doneCount',f.length?(f.length+' task'+(f.length!==1?'s':'')):'');
+  setHtml('doneList',f.length?f.map(taskHTML).join(''):'<div class="empty"><div class="empty-icon">✅</div><p>No completed tasks yet.</p></div>');
 }
 function divider(l,count,grouped){var cls='section-divider'+(grouped?' grouped':'');return '<div class="'+cls+'"><span class="section-divider-label">'+l+(count!==undefined?' <span class="section-divider-count">('+count+')</span>':'')+'</span><div class="section-divider-line"></div></div>';}
 
@@ -2689,7 +2746,9 @@ function moveTodayItem(i, dir){
 async function toggleTodayItemDone(i){
   const item = todayFocus[i];
   if(!item)return;
-  const newDone = !item.done;
+  // Base the toggle on the task, not on the stored copy of its done flag.
+  const live = tasks.find(function(x){return x.id===item.id;});
+  const newDone = !(live?live.done:item.done);
   todayFocus[i].done = newDone;
   // Also mark the actual task as done on Board
   if(newDone){
@@ -2726,14 +2785,17 @@ function renderTodayFocus(){
   const html = todayFocus.length ? todayFocus.map(function(item,i){
     // Get tags from task
     var t=tasks.find(function(x){return x.id===item.id;})||{};
+    // The live task wins: a renamed or completed task used to keep showing the copy that
+    // was stored when it was pinned.
+    var liveTitle=(t.title!==undefined&&t.title!=='')?t.title:(item.title||'(No title)');
+    var liveDone=(t.done!==undefined)?!!t.done:!!item.done;
     var tags=(t.sites||[]).map(function(s){return '<span class="itag itag-s">'+escHtml(s)+'</span>';}).join('')
       +(t.persons||[]).map(function(p){return '<span class="itag itag-p">'+escHtml(p)+'</span>';}).join('')
       +(t.tags||[]).map(function(g){return '<span class="itag itag-t">'+escHtml(g)+'</span>';}).join('');
-    return '<div class="today-item'+(item.done?' done-today':'')+'" draggable="true" data-idx="'+i+'" ondragstart="todayDragStart(event,'+i+')" ondragover="todayDragOver(event)" ondrop="todayDrop(event,'+i+')" ondragend="todayDragEnd()">'
-      
-      +'<div class="today-item-check'+(item.done?' checked':'')+'" onclick="toggleTodayItemDone('+i+')"></div>'
+    return '<div class="today-item'+(liveDone?' done-today':'')+'" draggable="true" data-idx="'+i+'" ondragstart="todayDragStart(event,'+i+')" ondragover="todayDragOver(event)" ondrop="todayDrop(event,'+i+')" ondragend="todayDragEnd()">'
+      +'<div class="today-item-check'+(liveDone?' checked':'')+'" onclick="toggleTodayItemDone('+i+')"></div>'
       +'<div style="flex:1;min-width:0;">'
-        +'<div class="today-item-title" onclick="todayItemClick(this)" data-tid="'+item.id+'" style="margin-bottom:'+(tags?'3px':'0')+';">'+escHtml(item.title)+'</div>'
+        +'<div class="today-item-title" onclick="todayItemClick(this)" data-tid="'+item.id+'" style="margin-bottom:'+(tags?'3px':'0')+';">'+escHtml(liveTitle)+'</div>'
         +(tags?'<div style="display:flex;flex-wrap:wrap;gap:3px;">'+tags+'</div>':'')
       +'</div>'
       +'<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;min-width:28px;">'
@@ -2744,8 +2806,8 @@ function renderTodayFocus(){
       +'</div>';
   }).join('') : '<div style="color:var(--text3);font-size:12px;padding:12px 4px;">No tasks yet.<br>Click 📌 on any task to add it here.</div>';
 
-  if(desktopEl)desktopEl.innerHTML = html;
-  if(mobileEl)mobileEl.innerHTML = html;
+  setHtml(desktopEl,html);
+  setHtml(mobileEl,html);
 
   // Update today count on mobile tab
   const todayCount = document.getElementById('todayCount');
@@ -2768,23 +2830,74 @@ function renderTrashList(){
   const el=document.getElementById('trashList');
   if(!el)return;
   if(!trashItems.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0;">Trash is empty.</div>';return;}
-  el.innerHTML=trashItems.map(function(t){return '<div class="settings-item">'
-    +'<span class="settings-item-name">'+escHtml(t.title||'(No title)')+'</span>'
+  setHtml(el,trashItems.map(function(t){
+    var age=trashAgeDays(t);
+    return '<div class="settings-item">'
+    +'<span class="settings-item-name">'+escHtml(t.title||'(No title)')
+      +(age===null?'':' <span class="backup-when">'+(age===0?'today':age+'d')+'</span>')+'</span>'
     +'<div style="display:flex;gap:6px;">'
     +'<button class="btn btn-ghost btn-sm" onclick="restoreTask(\''+t.id+'\')">Restore</button>'
     +'<button class="btn btn-danger btn-sm" onclick="permDelete(\''+t.id+'\')">Delete</button>'
-    +'</div></div>';}).join('');
+    +'</div></div>';}).join(''));
+  var old=trashOlderThan(TRASH_OLD_DAYS);
+  setHtml('trashOldRow', old.length
+    ? '<button class="btn btn-ghost btn-sm" onclick="purgeOldTrash()">🗑 Delete the '
+      + old.length + ' item' + (old.length!==1?'s':'') + ' older than ' + TRASH_OLD_DAYS + ' days</button>'
+    : '');
+}
+
+const TRASH_OLD_DAYS=30;
+
+// deletedAt is a Firestore timestamp, and a just-deleted item has a pending one that reads
+// as null client-side -- treat that as today rather than as unknown.
+function trashAgeDays(t){
+  if(!t)return null;
+  var ms=null;
+  try{ ms=t.deletedAt&&t.deletedAt.toMillis?t.deletedAt.toMillis():null; }catch(e){ ms=null; }
+  if(ms===null)return 0;
+  var d=Math.floor((Date.now()-ms)/86400000);
+  return d<0?0:d;
+}
+function trashOlderThan(days){
+  return trashItems.filter(function(t){var a=trashAgeDays(t);return a!==null&&a>=days;});
+}
+
+async function purgeOldTrash(){
+  var doomed=trashOlderThan(TRASH_OLD_DAYS);
+  if(!doomed.length){showToast('Nothing that old in Trash');return;}
+  if(!confirm('Permanently delete '+doomed.length+' item'+(doomed.length!==1?'s':'')
+    +' deleted more than '+TRASH_OLD_DAYS+' days ago? This cannot be undone.'))return;
+  var batch=db.batch();
+  doomed.forEach(function(t){batch.delete(db.collection('trash').doc(t.id));});
+  await batch.commit();
+  for(var i=0;i<doomed.length;i++)await deleteAttachmentsOf(doomed[i]);
+  showToast('Deleted '+doomed.length+' old item'+(doomed.length!==1?'s':''));
 }
 
 async function restoreTask(trashId){
   const t=trashItems.find(x=>x.id===trashId);if(!t)return;
   const restored={...t};
-  delete restored.id;delete restored.deletedAt;delete restored.originalId;
+  const wantId=t.originalId||'';
+  delete restored.id;delete restored.deletedAt;delete restored.originalId;delete restored.mergedInto;
   restored.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
   if(!restored.createdAt)restored.createdAt=firebase.firestore.FieldValue.serverTimestamp();
-  await db.collection('tasks').add(restored);
+  var hist=JSON.parse(JSON.stringify(restored.history||[]));
+  hist.push({type:'restored',time:Date.now()});
+  restored.history=hist;
+  // Put it back under the id it had. Anything still pointing at that id -- a pinned Today
+  // item, for one -- then finds it again. Only fall back to a new id if the old one is
+  // occupied, which can only happen if a restore has already been done.
+  var reuse=false;
+  if(wantId){
+    try{
+      var existing=await db.collection('tasks').doc(wantId).get();
+      reuse=!existing.exists;
+    }catch(e){ reuse=false; }
+  }
+  if(reuse)await db.collection('tasks').doc(wantId).set(restored);
+  else await db.collection('tasks').add(restored);
   await db.collection('trash').doc(trashId).delete();
-  showToast('Task restored ✓');
+  showToast(reuse?'Task restored \u2713':'Task restored under a new id \u2713');
 }
 
 async function permDelete(trashId){
@@ -2946,9 +3059,9 @@ async function migrateAttachments(){
 }
 
 function renderSettingsLists(){
-  document.getElementById('siteSettingsList').innerHTML=sites.map((s,i)=>'<div class="settings-item"><span class="settings-item-name">'+s+'</span><button class="btn btn-ghost btn-sm" onclick="removeSite('+i+')">Remove</button></div>').join('');
-  document.getElementById('personSettingsList').innerHTML=persons.map((p,i)=>'<div class="settings-item"><span class="settings-item-name">'+p+'</span><button class="btn btn-ghost btn-sm" onclick="removePerson('+i+')">Remove</button></div>').join('');
-  document.getElementById('projectSettingsList').innerHTML=projectTasks.map((p,i)=>'<div class="settings-item"><span class="settings-item-name">'+p+'</span><button class="btn btn-ghost btn-sm" onclick="removeProjectTask('+i+')">Remove</button></div>').join('');
+  setHtml('siteSettingsList',sites.map((s,i)=>'<div class="settings-item"><span class="settings-item-name">'+s+'</span><button class="btn btn-ghost btn-sm" onclick="removeSite('+i+')">Remove</button></div>').join(''));
+  setHtml('personSettingsList',persons.map((p,i)=>'<div class="settings-item"><span class="settings-item-name">'+p+'</span><button class="btn btn-ghost btn-sm" onclick="removePerson('+i+')">Remove</button></div>').join(''));
+  setHtml('projectSettingsList',projectTasks.map((p,i)=>'<div class="settings-item"><span class="settings-item-name">'+p+'</span><button class="btn btn-ghost btn-sm" onclick="removeProjectTask('+i+')">Remove</button></div>').join(''));
   renderAttachStorageState();
 }
 async function addSite(){const v=document.getElementById('newSiteInput').value.trim();if(!v||sites.includes(v))return;sites.push(v);document.getElementById('newSiteInput').value='';await db.collection('meta').doc('sites').set({list:sites});renderSettingsLists();}
@@ -3129,6 +3242,50 @@ async function resumeTask(){
   closePause();
   closeDetail();
   await resumeTaskById(id);
+}
+
+// -- BACKUP AGE --
+// A static page cannot back itself up on a schedule, so the next best thing is to stop the
+// only copy depending on somebody remembering. exportData records the date; the board says
+// so when it starts getting old.
+const BACKUP_NAG_DAYS=14;      // a gentle reminder
+const BACKUP_STALE_DAYS=30;    // and a louder one
+let lastExportAt='';           // 'YYYY-MM-DD', from meta/settings
+let backupNagDismissed=false;  // for this page load only
+
+function daysSince(dateStr){
+  if(!dateStr)return null;
+  var d=Math.round((dateFromStr(todayStr())-dateFromStr(dateStr))/86400000);
+  return d<0?0:d;
+}
+
+function backupAgeText(){
+  var n=daysSince(lastExportAt);
+  if(n===null)return 'never exported';
+  if(n===0)return 'exported today';
+  if(n===1)return 'exported yesterday';
+  return 'exported '+n+' days ago';
+}
+
+function renderBackupNag(){
+  var el=document.getElementById('backupNag');
+  if(!el)return;
+  var n=daysSince(lastExportAt);
+  var due=(n===null)||n>=BACKUP_NAG_DAYS;
+  el.classList.toggle('show',due&&!backupNagDismissed);
+  el.classList.toggle('stale',n!==null&&n>=BACKUP_STALE_DAYS);
+  if(due){
+    document.getElementById('backupNagText').textContent=
+      (n===null?'No backup recorded yet.':'Last backup '+n+' days ago.')
+      +' This board is the only copy of it.';
+  }
+  var when=document.getElementById('backupWhen');
+  if(when)when.textContent=backupAgeText();
+}
+
+function dismissBackupNag(){
+  backupNagDismissed=true;
+  renderBackupNag();
 }
 
 // -- HAND A TASK OVER TO CLICKUP --
@@ -3328,6 +3485,16 @@ async function exportData(){
   a.download='workboard-backup-'+todayStr()+'.json';
   a.click();
   showToast('Exported '+tasks.length+' task'+(tasks.length!==1?'s':'')+trashNote+attachNote+' \u2713');
+  // Merge, never set: this document also holds the defaults.
+  lastExportAt=todayStr();
+  backupNagDismissed=false;
+  renderBackupNag();
+  try{
+    await db.collection('meta').doc('settings').set({lastExportAt:lastExportAt},{merge:true});
+  }catch(e){
+    // The file is already downloaded, which is what matters. Only the reminder is affected.
+    showToast('Exported, but the backup date could not be recorded');
+  }
 }
 
 function normalizeBackup(raw){
@@ -3836,7 +4003,7 @@ function openDetail(elOrId) {
   if (history.length) {
     body += '<div class="detail-section">';
     body += '<div class="detail-section-label">History</div>';
-    const histLabels = {created:'Task created',edited:'Task edited',completed:'Marked as done',reopened:'Reopened',merged:'Merged with another task',repeated:'Created by a repeat'};
+    const histLabels = {created:'Task created',edited:'Task edited',completed:'Marked as done',reopened:'Reopened',merged:'Merged with another task',repeated:'Created by a repeat',restored:'Restored from Trash'};
     history.slice().reverse().forEach(function(h) {
       body += '<div class="history-item">'
         +'<div class="history-dot"></div>'

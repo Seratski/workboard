@@ -120,9 +120,18 @@ comments on the same task simultaneously will lose one of the writes.
 
 A full copy of the task, plus `deletedAt` (serverTimestamp) and `originalId`, with the
 client-side `id` stripped. A copy created by a merge also carries `mergedInto` naming the
-task it was folded into. Restoring creates a **new** task document — the original ID is
-not reused, so anything pointing at the old ID (a pinned Today item, for example) will not
-follow. There is no automatic expiry; trash grows until emptied by hand.
+task it was folded into.
+
+**Restoring writes the task back under its `originalId`**, so a pinned Today item — or
+anything else holding that id — finds it again. It falls back to a new id only if that id is
+already occupied, which takes a second restore of the same trash entry, and says so in the
+toast. The restore adds a `restored` history entry, and the trash-only fields
+(`originalId`, `deletedAt`, `mergedInto`) are stripped rather than carried onto the task.
+
+Trash still has **no automatic expiry**, on purpose: it is the undo buffer, and deleting
+someone's data on a timer to save a few kilobytes is a bad trade. Each row shows its age
+instead, and one button clears everything older than `TRASH_OLD_DAYS` (30). `trashAgeDays`
+treats a pending `deletedAt` — which reads as null client-side for a moment — as today.
 
 ### Real-time listeners
 
@@ -131,8 +140,26 @@ follow. There is no automatic expiry; trash grows until emptied by hand.
 `trash` listener is lazy, starting the first time Settings is opened. Signing out releases
 all seven and clears their handles, so the start guards do not block a later sign-in.
 
-Every snapshot calls `renderAll()`, which re-renders every list on every page. Cheap at
-current data volumes; the first thing to revisit if the board ever gets slow.
+Every snapshot calls `renderAll()`. Two things keep that from being the mess it was:
+
+- **It coalesces.** `renderAll()` only requests a render; one happens on the next animation
+  frame. A page load fires four listeners (tasks, sites, persons, projectTasks) and used to
+  perform four complete renders — now it performs one.
+- **Only changed markup is written.** Every list goes through `setHtml`, which compares the
+  new string against the one it last assigned and returns without touching the DOM if they
+  match. Measured on a 43-task board: a snapshot that changes nothing performs **0 markup
+  writes** across 14 lists in 2.6 ms, where it used to replace all 14 wholesale.
+
+`setHtml` compares against a string cached on the element (`__wbHtml`), **not** against
+`el.innerHTML`. The browser normalises markup as it parses it, so reading it back gives a
+different string from the one assigned — the first version of this guard compared with
+`innerHTML` and five of fourteen lists re-wrote on an identical render anyway.
+
+Not doing: rendering only the visible page. One full render is 2.6–3.6 ms at this size, so
+it buys nothing measurable while introducing a class of bug where a page shows stale content
+because the render that would have fixed it was skipped.
+
+`renderAllNow()` is the synchronous version. Nothing in the app calls it; the tests do.
 
 A 5-second `setTimeout` force-hides the loading screen as a fallback if no snapshot
 arrives.
@@ -205,6 +232,22 @@ sets the `active` class on either.
 The browser Back button is intercepted by a `popstate` handler that closes the topmost
 overlay instead of leaving the page.
 
+### The backup age
+
+There is one copy of this data. Production is Firestore, the only backup is a JSON file
+someone remembered to export, and *Replace everything* on import is two clicks from
+overwriting the lot. A static page cannot back itself up on a schedule — so instead it stops
+depending on memory.
+
+`exportData()` records `lastExportAt` (a `'YYYY-MM-DD'` string) in `meta/settings`, **with
+`{merge:true}`** — that document also holds the defaults. `renderBackupNag()` shows a banner
+above the task list after `BACKUP_NAG_DAYS` (14) and switches it to the red styling after
+`BACKUP_STALE_DAYS` (30). Settings shows the age in words next to the Export button.
+
+No record yet reads as a prompt rather than an alarm: it means the app has not seen an
+export, not that none was ever taken. Dismissing hides the banner for that page load only —
+deliberately not persisted, because the point is that it comes back.
+
 ### Two different "today" concepts
 
 This trips people up. The Today page shows both:
@@ -217,6 +260,17 @@ This trips people up. The Today page shows both:
 
 The badge on the Today *panel* toggle button counts undone **focus** items. Same word, two
 meanings, two different counts on screen at once.
+
+The two headings on the Today page have their own count elements: `#todayCount` for
+*Today focus* and `#todayDueCount` for *Due today*. Until August 2026 `renderTodayList`
+wrote the due-today number into `#todayCount`, which `renderTodayFocus` also writes with the
+pinned count — so the heading showed 9 or 3 depending on which listener fired last, and
+`#todayDueCount` was never filled at all.
+
+`meta/todayFocus` stores `{id, title, done}`, and the title and the flag are **copies**. The
+panel renders the live task's values and keeps the stored ones only as a fallback for a task
+that no longer exists, so a rename or a completion on the board shows up in the panel. The
+copies are still what gets written, so a reader that trusts them will still be wrong.
 
 ### Board view modes
 
@@ -648,6 +702,10 @@ hid it again above 700px — nothing ever turned it on. Since `.nav-tabs` *is* h
 Settings. Fixed by adding `.bottom-nav{display:block;}` inside the `max-width:700px` block.
 A browser test now asserts it is visible, positioned at the bottom, and lists all six
 destinations, so this cannot regress unnoticed.
+
+**A dead floating action button.** `.fab` had three CSS rules and three
+`getElementById('fab')` lookups, and the element was never in the markup, so all three
+guards had always found null. Removed in August 2026.
 
 **Sign-out does not reset every guard.**
 `handleUser()` now releases all seven listeners and clears their handles, so a later
