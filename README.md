@@ -41,11 +41,22 @@ python -m http.server 8000     # then open http://localhost:8000
 
 There is no staging environment. A push to `main` is a deploy, and the deployed app talks
 to the production Firestore immediately — there is no second copy of the data to break
-safely. Run the tests and click through the affected screens first.
+safely. Click through the affected screens first.
 
-Tests live outside this repository, in `NCS Projects\WorkBoard Claude\tests`, and read
-functions straight out of `index.html` rather than a copy. See `START-HERE.md` there for how
-to run them.
+## Tests
+
+`tests/` holds 287 pure-logic assertions and 508 headless-browser ones, and
+[GitHub Actions](.github/workflows/tests.yml) runs all of them on every push. Both suites
+read functions and markup **straight out of `index.html`** rather than a fixture of it, so
+they exercise the file that ships. `tests/browser/test.html` is generated on each run and is
+gitignored.
+
+CI cannot block a deploy — Pages publishes `main` whether the run is green or red — so treat
+a red tick as "look at what you just shipped". The run also fails if an owner UID, an API
+token, a private key or a real Outlook mailbox id ever appears in a tracked file.
+
+To run them by hand you need Node plus `jsdom` and `playwright`; see `START-HERE.md` in
+`NCS Projects\WorkBoard Claude`.
 
 > **Note on history:** commits before May 2026 were made by uploading the file through
 > the GitHub web UI, so they all read "Add files via upload" and carry no description of

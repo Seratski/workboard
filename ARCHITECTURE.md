@@ -730,9 +730,10 @@ is ever added.
   must pin to the owner's UID — see `firestore.rules`, which is the committed record of
   intent, not the deployed artifact (rules are published from the Firebase console).
 - **No staging.** `main` is production, and the deployed app talks to the live Firestore
-  immediately. There *is* a test suite — 287 pure-logic and 508 headless-browser assertions
-  in `NCS Projects\WorkBoard Claude\tests` — but nothing enforces it: no CI, no pre-push
-  hook. It runs when someone runs it.
+  immediately. The 795 assertions in `tests/` do run on every push, via GitHub Actions, but
+  the workflow **cannot block the deploy**: Pages publishes `main` regardless of the result.
+  A red tick is a signal to look, not a gate. Making it a gate needs branch protection and
+  pull requests.
 - **Card HTML is built by string concatenation** and lists are replaced wholesale rather
   than diffed. `renderAll()` coalesces into one animation frame and `setHtml` skips
   unchanged markup, which is enough at this scale — a no-op snapshot writes nothing. What

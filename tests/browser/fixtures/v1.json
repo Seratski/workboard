@@ -1,0 +1,114 @@
+{
+  "workboard": 1,
+  "exportedAt": "2026-08-20T09:00:00.000Z",
+  "tasks": [
+    {
+      "id": "t1",
+      "title": "Plain old note (from backup)",
+      "note": "restored",
+      "priority": "low",
+      "date": "",
+      "sites": [
+        "DK"
+      ],
+      "persons": [],
+      "tags": [],
+      "actions": [],
+      "links": [],
+      "attachments": [],
+      "comments": [],
+      "history": [],
+      "done": false,
+      "createdAt": {
+        "seconds": 1786900000,
+        "nanoseconds": 0
+      }
+    },
+    {
+      "id": "t2",
+      "title": "HTML note (from backup)",
+      "note": "restored",
+      "priority": "high",
+      "date": "",
+      "sites": [],
+      "persons": [],
+      "tags": [],
+      "actions": [],
+      "links": [],
+      "attachments": [],
+      "comments": [],
+      "history": [],
+      "done": false
+    },
+    {
+      "id": "brandnew",
+      "title": "Only in the backup",
+      "note": "",
+      "priority": "none",
+      "date": "",
+      "sites": [
+        "FI"
+      ],
+      "persons": [
+        "Anna"
+      ],
+      "tags": [
+        "imported"
+      ],
+      "actions": [],
+      "links": [],
+      "attachments": [],
+      "comments": [],
+      "history": [],
+      "done": false
+    },
+    {
+      "title": "No id in the file",
+      "note": "",
+      "priority": "none",
+      "date": "",
+      "sites": [],
+      "persons": [],
+      "tags": [],
+      "actions": [],
+      "links": [],
+      "attachments": [],
+      "comments": [],
+      "history": [],
+      "done": false
+    }
+  ],
+  "trash": [
+    {
+      "id": "trX",
+      "title": "From backup trash",
+      "deletedAt": {
+        "seconds": 1786500000,
+        "nanoseconds": 0
+      }
+    }
+  ],
+  "meta": {
+    "sites": [
+      "DK",
+      "FI"
+    ],
+    "persons": [
+      "Anna"
+    ],
+    "projectTasks": [
+      "imported"
+    ],
+    "settings": {
+      "defaultLabel": "imported",
+      "defaultPerson": "Anna"
+    },
+    "todayFocus": [
+      {
+        "id": "brandnew",
+        "title": "Only in the backup",
+        "done": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "tasks": [
+    {
+      "id": "oldfmt",
+      "title": "From the old flat export",
+      "note": "",
+      "priority": "none",
+      "date": "",
+      "sites": [],
+      "persons": [],
+      "tags": [],
+      "actions": [],
+      "links": [],
+      "attachments": [],
+      "comments": [],
+      "history": [],
+      "done": false
+    }
+  ],
+  "sites": [
+    "DK",
+    "NO",
+    "XX"
+  ],
+  "persons": [
+    "Legacy Person"
+  ],
+  "projectTasks": [
+    "legacy"
+  ]
+}

@@ -1,0 +1,111 @@
+# WorkBoard's tests, run on every push.
+#
+# There is no build step and no staging: a push to main is a deploy, straight onto the
+# production Firestore. This workflow is the only thing between an edit and that, so it runs
+# both suites against the index.html in the commit -- not against a copy.
+#
+# It cannot stop the deploy. GitHub Pages publishes main regardless of whether this passes,
+# so a red tick means "look at what you just shipped", not "it was blocked". Making it a
+# gate would mean a branch-protection rule and pull requests, which is more ceremony than a
+# one-person board needs.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No package.json in the repository on purpose: the app has no dependencies and
+      # nothing here should suggest a build step exists. The two test dependencies are
+      # installed into a scratch folder outside the checkout.
+      - name: Install the test dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/deps"
+          cd "$RUNNER_TEMP/deps"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund jsdom@30 playwright@1
+          npx playwright install --with-deps chromium
+
+      # The Firestore rules are the only access control in this system and they pin to the
+      # owner's UID. firestore.rules in the repository keeps a placeholder; the real UID is
+      # published from the Firebase console and must never be committed. Note that the UID
+      # itself does not appear here either -- this checks the shape and the placeholder, so
+      # the guard does not become the leak.
+      - name: Check that no secret has crept into the tracked files
+        run: |
+          fail=0
+
+          if [ -f firestore.rules ] && ! grep -q 'OWNER_UID' firestore.rules; then
+            echo "::error file=firestore.rules::The OWNER_UID placeholder is gone -- a real UID may have been committed."
+            fail=1
+          fi
+
+          # A pinned UID anywhere in the tracked files, whatever its value.
+          if grep -rInE "auth\.uid[[:space:]]*==[[:space:]]*['\"][A-Za-z0-9_-]{20,}['\"]" \
+               --exclude-dir=.github --exclude-dir=.git . ; then
+            echo "::error::A literal Firebase UID is present in a tracked file."
+            fail=1
+          fi
+
+          # API tokens: ClickUp personal tokens, Google API keys, Firebase private keys.
+          if grep -rInE "pk_[0-9]{6,}|AIza[A-Za-z0-9_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----" \
+               --exclude-dir=.github --exclude-dir=.git \
+               --exclude=index.html . ; then
+            echo "::error::What looks like an API token or private key is present."
+            fail=1
+          fi
+
+          # A real Outlook mailbox item id, which the tests must never carry.
+          if grep -rInE "ItemID=AAMkAD[A-Za-z0-9%]{30,}" \
+               --exclude-dir=.github --exclude-dir=.git . ; then
+            echo "::error::A real-looking OWA mailbox item id is present in a test."
+            fail=1
+          fi
+
+          # index.html is excluded from the token scan above because the Firebase web API
+          # key lives there by design -- it identifies the project, it does not grant access.
+          # Check that it is the only AIza... in the file and nothing else crept alongside.
+          if [ "$(grep -coE 'AIza[A-Za-z0-9_-]{30,}' index.html)" != "1" ]; then
+            echo "::error file=index.html::Expected exactly one Firebase web API key."
+            fail=1
+          fi
+
+          if [ "$fail" = "1" ]; then exit 1; fi
+          echo "No pinned UID, no API token, no private key, no real mailbox id."
+
+      - name: Pure-logic assertions
+        env:
+          NODE_PATH: ${{ runner.temp }}/deps/node_modules
+          TZ: Europe/Copenhagen
+        run: node tests/wb-logic-tests.js
+
+      # Every suite reads functions and markup out of index.html itself, so this exercises
+      # the committed file rather than a fixture of it.
+      - name: Headless-browser assertions
+        env:
+          NODE_PATH: ${{ runner.temp }}/deps/node_modules
+          TZ: Europe/Copenhagen
+        run: node tests/browser/run-all.js
+
+      - name: Keep the failing harness for inspection
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-html
+          path: tests/browser/test.html
+          if-no-files-found: ignore
