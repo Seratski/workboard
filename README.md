@@ -105,6 +105,18 @@ behind. Nothing is scheduled server-side.
 August 2026 — it used to require a task to carry every selected value at once, which meant
 picking two sites usually returned nothing.
 
+## Creating and editing a task
+
+One button: **+ Task**. If the note turns out to need more room, **Write on a full page ↗**
+next to the Note field moves everything you have typed into the full-page editor — nothing
+is lost and nothing is saved twice. Do it while editing an existing task and that task
+becomes a formatted one, in place.
+
+**Edit** follows the task: one with a formatted note opens in the full-page editor, anything
+else opens the quick box. There used to be two of each — "+ Task" and "+ Note" that made the
+same thing, and "Edit" and "Open note" where Edit quietly wrote to a field the app never
+displays.
+
 ## Links, and mail from Outlook
 
 Paste a URL into the **Links** field — on the create screen while you are typing the task,
@@ -192,5 +204,8 @@ Fixed in August 2026 and described in ARCHITECTURE.md:
 - A new task could not be handed to ClickUp while being created — you had to save it, find
   it again and open it. Both editors now have a Save & ClickUp button.
 - The upload zone claimed a 500 KB limit; the code has always enforced 700 KB.
+- Editing a task that had a formatted note through the small edit box saved the change to a
+  field the app never displays, so the edit vanished from view. Edit now opens the editor
+  that matches the task.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.

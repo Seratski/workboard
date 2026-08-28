@@ -545,6 +545,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .task-link-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.25);border-radius:10px;font-size:11px;color:#7aadff;text-decoration:none;font-family:var(--mono);}
 .task-link-chip:hover{background:rgba(79,142,247,0.18);border-color:var(--accent);}
 .detail-links{display:flex;flex-wrap:wrap;gap:6px;}
+.expand-note{float:right;background:transparent;border:none;color:var(--accent);font-family:var(--font);font-size:11px;font-weight:500;cursor:pointer;padding:0;text-transform:none;letter-spacing:0;}
+.expand-note:hover{text-decoration:underline;}
 .task-link-chip.is-mail{background:rgba(155,127,232,0.12);border-color:rgba(155,127,232,0.32);color:#c0a9ff;}
 .detail-link-row{display:flex;align-items:center;gap:6px;}
 .detail-link-row .detail-link-btn{flex:1;min-width:0;}
@@ -682,7 +684,9 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       <input class="form-input" id="fTitle" placeholder="What needs to be done?" />
     </div>
     <div class="form-field">
-      <label class="form-label">Note</label>
+      <label class="form-label">Note
+        <button class="expand-note" onclick="expandToRichEditor()" title="Move this task to the full-page editor, keeping everything you have typed">Write on a full page ↗</button>
+      </label>
       <textarea class="form-textarea" id="fNote" placeholder="Add more detail…"></textarea>
     </div>
     <div class="form-row-2">
@@ -780,7 +784,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     <div class="detail-body" id="detailBody"></div>
     <div class="detail-footer">
       <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
-      <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open note</button>
       <button class="btn btn-ghost btn-sm" id="detailPauseBtn" onclick="openPause()">⏸️ Pause</button>
       <button class="btn btn-ghost btn-sm" id="detailClickupBtn" onclick="openClickup()">📤 ClickUp</button>
       <button class="btn btn-ghost btn-sm" id="detailMergeBtn" onclick="openMergePicker()">🔀 Merge</button>
@@ -937,7 +940,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     </div>
     <div class="top-right">
       <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export</button>
-      <button class="btn btn-orange btn-sm" onclick="openRichEditor(null)">+ Note</button>
       <button class="btn btn-primary btn-sm" onclick="openModal()">+ Task</button>
       <div class="user-chip" onclick="doSignOut()" title="Sign out">
         <div class="user-avatar" id="userAvatar"></div>
@@ -991,7 +993,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
             <input id="searchInput" placeholder="Search… (Ctrl+K)" oninput="renderTasks()" />
           </div>
         </div>
-        <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ Task" or "📝 Rich task" above.</p></div></div>
+        <div id="taskList"><div class="empty"><div class="empty-icon">📝</div><p>No tasks yet.<br>Use "+ Task" above.</p></div></div>
       </div>
       <!-- TODAY FOCUS PANEL -->
       <div class="today-panel" id="todayPanel" style="display:none;">
@@ -1229,8 +1231,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
   <!-- MOBILE BOTTOM NAV -->
   <!-- MOBILE ACTION BAR -->
   <div class="mob-action-bar" id="mobActionBar">
-    <button class="mob-action-btn" onclick="openModal()">+ Task</button>
-    <button class="mob-action-btn mob-action-btn-orange" onclick="openRichEditor(null)">+ Note</button>
+    <button class="mob-action-btn mob-action-btn-orange" onclick="openModal()">+ Task</button>
   </div>
 
   <!-- MOBILE BOTTOM NAV -->
@@ -1766,7 +1767,7 @@ function taskHTML(t){
 
     +'</div>'
     +'<div class="task-actions-col">'
-      +(t.richBody?'<button class="ia" onclick="openRichEditor(\''+t.id+'\')">📝</button>':'')
+      +(t.richBody?'<button class="ia" onclick="event.stopPropagation();openRichEditor(\''+t.id+'\')" title="Open the note">📝</button>':'')
       +'<button class="ia" onclick="openEdit(\''+t.id+'\')">✏️</button>'
 
     +'</div>'
@@ -2162,10 +2163,14 @@ function openEdit(id){
   writeRepeat('f',t.repeat||null);
   renderModalChips();document.getElementById('taskOverlay').classList.remove('hidden');
 }
+// Set while a half-typed task is being moved to the full-page editor, so closeModal does
+// not leave a draft that would reappear next time + Task is opened.
+let skipTaskDraft=false;
+
 function closeModal(){
   // Autosave draft to localStorage if there's a title and not editing
   const title=document.getElementById('fTitle')?.value?.trim();
-  if(title&&!editingId){
+  if(title&&!editingId&&!skipTaskDraft){
     try{
       localStorage.setItem('wb_task_draft',JSON.stringify({
         title,
@@ -2269,9 +2274,61 @@ function addRichAction(){
 function toggleRichAction(i){rActions[i].done=!rActions[i].done;renderRichActions();richAutoSave();}
 function removeRichAction(i){rActions.splice(i,1);renderRichActions();richAutoSave();}
 
-function openRichEditor(id){
+// The small note field holds plain text; the full-page editor holds HTML. Escape first,
+// then turn blank lines into paragraphs and single newlines into breaks, so what was typed
+// keeps its shape instead of collapsing into one run of text.
+function plainToHtml(text){
+  var t=String(text==null?'':text).replace(/\r\n?/g,'\n').trim();
+  if(!t)return '';
+  return t.split(/\n{2,}/).map(function(par){
+    return '<p>'+escHtml(par).replace(/\n/g,'<br>')+'</p>';
+  }).join('');
+}
+
+// Carry the half-typed task from the quick modal into the full-page editor. Everything
+// comes along -- title, note, priority, date, repeat, sites, people, labels, action items,
+// links and attachments -- and if the task already exists, the editor keeps editing it, so
+// this is also how a plain task becomes a formatted one.
+function expandToRichEditor(){
+  var carried={
+    id:(editingId&&editingId!=='saved')?editingId:null,
+    title:document.getElementById('fTitle').value,
+    note:document.getElementById('fNote').value,
+    priority:document.getElementById('fPriority').value,
+    date:document.getElementById('fDate').value,
+    repeat:readRepeat('f'),
+    sites:fSites.slice(), persons:fPersons.slice(), tags:fProjects.slice(),
+    actions:JSON.parse(JSON.stringify(fActions)),
+    links:JSON.parse(JSON.stringify(fLinks)),
+    attachments:JSON.parse(JSON.stringify(modalAttachments))
+  };
+  // Close without leaving a quick-modal draft behind: the content is moving, not being
+  // abandoned, and a leftover draft would reappear the next time + Task is opened.
+  skipTaskDraft=true;
+  closeModal();
+  skipTaskDraft=false;
+  openRichEditor(carried.id,carried);
+}
+
+function openRichEditor(id,carried){
   richEditingId=id;
-  if(id){
+  if(carried){
+    // Handed over from the quick modal. This branch comes first on purpose: what was just
+    // typed wins over what is stored, otherwise expanding a task being edited would throw
+    // the edit away and reload the saved version.
+    document.getElementById('richTitle').value=carried.title||'';
+    document.getElementById('richBody').innerHTML=plainToHtml(carried.note);
+    document.getElementById('richPriority').value=carried.priority||'none';
+    document.getElementById('richDate').value=carried.date||'';
+    writeRepeat('r',carried.repeat||null);
+    rSites=(carried.sites||[]).slice();rPersons=(carried.persons||[]).slice();
+    rProjects=(carried.tags||[]).slice();
+    rActions=JSON.parse(JSON.stringify(carried.actions||[]));
+    rLinks=JSON.parse(JSON.stringify(carried.links||[]));
+    richAttachments=JSON.parse(JSON.stringify(carried.attachments||[]));
+    renderAttachPreview('rich');renderRichLinks();
+    document.getElementById('richTaskStatus').textContent=id?'Editing saved task':'Draft \u2014 not saved yet';
+  }else if(id){
     const t=tasks.find(x=>x.id===id);if(!t)return;
     document.getElementById('richTitle').value=t.title||'';
     if(t.richHtml)document.getElementById('richBody').innerHTML=sanitizeRichBody(t.richBody||'');
@@ -2309,7 +2366,10 @@ function openRichEditor(id){
   clearTimeout(richAutoSaveTimer);
   renderRichChips();
   showPage('rich');
-  setTimeout(()=>{var el=document.getElementById(id?'richTitle':'richBody');if(el){el.focus();if(!id){var range=document.createRange();var sel=window.getSelection();range.selectNodeContents(el);range.collapse(false);sel.removeAllRanges();sel.addRange(range);}}},100);
+  // Focus the body, cursor at the end, unless we are opening a saved task cold -- then the
+  // title is the natural place to land. An escalation always continues in the body.
+  var toBody=carried||!id;
+  setTimeout(()=>{var el=document.getElementById(toBody?'richBody':'richTitle');if(el){el.focus();if(toBody){var range=document.createRange();var sel=window.getSelection();range.selectNodeContents(el);range.collapse(false);sel.removeAllRanges();sel.addRange(range);}}},100);
 }
 function closeRichEditor(){
   richFlush(); // don't drop a debounce that has not fired yet
@@ -3795,7 +3855,6 @@ function openDetail(elOrId) {
   const check = document.getElementById('detailCheck');
   check.className = 'check-box' + (t.done ? ' checked' : '');
   document.getElementById('detailDoneLabel').textContent = t.done ? 'Completed' : 'Mark done';
-  document.getElementById('detailRichBtn').style.display = t.richBody ? 'inline-flex' : 'none';
   var pb=document.getElementById('detailPauseBtn');
   if(pb)pb.textContent=isPaused(t)?'\u23f8\ufe0f Paused':'\u23f8\ufe0f Pause';
 
@@ -3905,22 +3964,24 @@ function closeDetail() {
   detailTaskId = null;
 }
 
+// One editing door per task, chosen by what the task actually is. A task with a formatted
+// body opens in the full-page editor; anything else opens the quick modal.
+//
+// This used to be two buttons, and the quick modal was the default for both. For a task
+// with a richBody that meant editing `note` -- a flattened 500-character preview -- while
+// the detail modal went on rendering `richBody`. The edit was saved and never shown again.
 function editFromDetail() {
   const id = detailTaskId;
+  const t = tasks.find(x => x.id === id);
   closeDetail();
-  openEdit(id);
+  if (t && t.richBody) openRichEditor(id);
+  else openEdit(id);
 }
 
 async function resumeTaskFromDetail(){
   var id=detailTaskId;
   closeDetail();
   await resumeTaskById(id);
-}
-
-function richFromDetail() {
-  const id = detailTaskId;
-  closeDetail();
-  openRichEditor(id);
 }
 
 function toggleDoneFromDetail() {

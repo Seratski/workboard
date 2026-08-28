@@ -93,7 +93,7 @@ the same change as the collection; without it every attachment write returns
 |---|---|---|
 | `title` | string | |
 | `note` | string | Short note. Rich saves put the first 500 chars of the body here. |
-| `richBody` | string | The note body, present only for tasks made in the note editor. HTML when `richHtml` is true, otherwise plain text. Its presence is what makes the 📝 button appear. |
+| `richBody` | string | The note body, present only for tasks written in the full-page editor. HTML when `richHtml` is true, otherwise plain text. **Its presence decides which editor `Edit` opens.** |
 | `richHtml` | boolean | True on notes saved since August 2026, meaning `richBody` holds sanitized HTML. Absent on older notes, which hold plain text. **Always branch on this** — rendering plain text as HTML or vice versa is the failure mode. |
 | `priority` | `'none'` \| `'high'` \| `'medium'` \| `'low'` | |
 | `date` | `'YYYY-MM-DD'` | Due date. Compared as a string throughout — no `Date` parsing. |
@@ -190,7 +190,7 @@ sets the `active` class on either.
 | `today` | 📅 Today | Today focus list **and** a separate "Due today" list |
 | `paused` | ⏸️ Paused | Tasks with a future `snoozedUntil`, soonest wake first |
 | `done` | ✅ Done | Completed tasks |
-| `rich` | *none* | Full-page note editor; entered via "+ Note" or a 📝 button |
+| `rich` | *none* | Full-page note editor; entered from "Write on a full page ↗" in the quick modal, from `Edit` on a task that has a `richBody`, or from the 📝 button on a task row |
 | `settings` | ⚙️ Settings | Sites, People, Labels, defaults, Trash, Account |
 
 ### Keyboard shortcuts
@@ -267,7 +267,33 @@ allows one or two words, so three-part names are only partly matched.
 
 ### The note editor
 
-The full-page editor reached via "+ Note" or a 📝 button. Left side is a `contenteditable`
+The full-page editor. It is not a second kind of object: it writes the same task document
+as the quick modal, with the same fields. The only difference is the body — a
+`contenteditable` holding sanitized HTML instead of a plain-text `<textarea>`.
+
+**There is one way in and one way back to a task.** Until August 2026 the top bar had both
+"+ Task" and "+ Note", which made the same thing and forced a choice before you knew how
+much you were going to write; and the detail modal had both `Edit` and `📝 Open note`. Now:
+
+- One "+ Task" button. The quick modal's Note field carries **Write on a full page ↗**
+  (`expandToRichEditor()`), which moves the half-typed task over — title, note, priority,
+  date, repeat, sites, people, labels, action items, links and attachments — and keeps
+  editing the same document if it already existed, which is how a plain task becomes a
+  formatted one.
+- `Edit` follows the task: a `richBody` opens the full page, anything else opens the quick
+  modal. The separate 📝 button in the detail modal is gone.
+
+Two things to know about the escalation:
+
+1. **In `openRichEditor(id, carried)` the `carried` branch must come before the `id`
+   branch.** Written the other way round — as it was first — expanding a task that was
+   being edited reloaded the stored version and silently discarded everything just typed.
+2. `closeModal()` normally writes a `wb_task_draft` for an unsaved task. During an
+   escalation `skipTaskDraft` suppresses that: the content is moving, not being abandoned,
+   and a leftover draft would reappear the next time + Task was opened.
+
+`plainToHtml()` does the body conversion: escape first, then blank lines become paragraphs
+and single newlines become `<br>`, so what was typed keeps its shape. Left side is a `contenteditable`
 with a formatting toolbar (bold, italic, H1, H2, bullet list, numbered list, divider) driven
 by `document.execCommand`. Right side holds the same structured fields as the quick modal.
 
@@ -607,6 +633,13 @@ changed, the payload documents have to be copied too.
 
 Confirmed by reading the source, not by guessing. Roughly ordered by impact. Referred to by
 name rather than number, so fixing one does not renumber the rest.
+
+**Editing a formatted task through the quick modal saved to a field nobody sees.**
+`openEdit` loaded `t.note` — the flattened 500-character preview — into the small textarea,
+and `saveTask` wrote it back to `note` without touching `richBody`. The detail modal renders
+`richBody` when it exists, so the edit was stored and never displayed again. Fixed by making
+`Edit` open the editor that matches the task. The asymmetry is still there in the data, so
+anything new that writes `note` on a task with a `richBody` will hit the same trap.
 
 **The bottom navigation was dead markup until August 2026.**
 `.bottom-nav` was `display:none` in the base rule, and the only other rule mentioning it
