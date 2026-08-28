@@ -107,6 +107,8 @@ the same change as the collection; without it every attachment write returns
 | `history` | `[{type, time}]` | `type` ∈ `created`, `edited`, `completed`, `reopened`, `merged`, `repeated`. |
 | `snoozedUntil` | `'YYYY-MM-DD'` \| `''` | Pause. While this is **strictly after** today the task is off the board. Empty or absent means not paused. Compared as a string, like `date`. |
 | `repeat` | `{n, unit, from}` \| `null` | Repeat rule. `unit` ∈ `day`, `week`, `month`; `n` is 1–365; `from` is `'due'` or `'done'`, the anchor the next date is counted from. `null` means no repeat. |
+| `clickupSent` | `'YYYY-MM-DD'` \| `''` | Set when the task was handed over to ClickUp. A record, not a link — nothing is synced. |
+| `clickupArea` | string | The ClickUp Area chosen at hand-over, stored as its display label. |
 | `done` | boolean | |
 | `createdAt` / `updatedAt` | serverTimestamp | `createdAt` drives the default query order. |
 
@@ -198,7 +200,7 @@ sets the `active` class on either.
 | `Ctrl/Cmd + K` | Focus the board search box (switches to Board first) |
 | `Ctrl/Cmd + Shift + K` | New task |
 | `Ctrl/Cmd + B` / `I` | Bold / italic, only while the note editor body has focus |
-| `Esc` | Closes the topmost overlay: the lightbox, then import, merge, the pause dialog, then the modals |
+| `Esc` | Closes the topmost overlay: the lightbox, then import, merge, the ClickUp dialog, the pause dialog, then the modals |
 
 The browser Back button is intercepted by a `popstate` handler that closes the topmost
 overlay instead of leaving the page.
@@ -219,10 +221,11 @@ meanings, two different counts on screen at once.
 ### Board view modes
 
 - **list** (`taskHTML`) — the full-detail row: stripe, checkbox, tags, links, note, action progress, attachments.
-- **grid** (`taskCardHTML`) — compact cards. Note that `.card-check` and `.card-actions` are
-  `display:none` in the CSS with no hover rule, so the per-card checkbox and edit/note
-  buttons are rendered but never visible. Clicking the card opens the detail modal, which
-  has the equivalent controls. See *Grid cards render controls that CSS hides*.
+- **grid** (`taskCardHTML`) — compact cards: stripe, title, note preview, tags, date,
+  action progress and an attachment count. Deliberately no per-card checkbox or edit
+  buttons — clicking the card opens the detail modal, which has both. That markup used to
+  exist but was hidden by CSS with no hover rule, so it was never reachable; it was deleted
+  in August 2026 rather than revealed, because a hover rule does nothing on a phone.
 - **kanban** (`kanbanCardHTML`) — three columns, **bucketed by priority** (High / Medium / Other), not by status. Cards cannot be dragged between columns; it is a read-only three-way split.
 
 ### Sorting and grouping
@@ -437,6 +440,9 @@ Everything else is combined without asking, in `buildMergedData`:
 | `comments` | concatenated, then sorted by `time` ascending |
 | `history` | concatenated, sorted by `time`, then a `merged` entry appended |
 | `done` | taken from A |
+| `snoozedUntil` | whichever pause wakes first, so a merge never hides work longer than either task already was |
+| `repeat` | A's rule, or B's if A has none. Was dropped entirely until August 2026 |
+| `clickupSent` / `clickupArea` | A's hand-over, or B's if A never went out. The Area is not borrowed from a hand-over that was not kept |
 
 If the result exceeds 500 characters, or either side had a `richBody`, the text is written
 to `richBody` with `note` holding the first 500 characters — matching what
@@ -450,6 +456,48 @@ silently. Excluding B's attachments is the escape hatch.
 If B was pinned in Today focus, the pin is moved to A rather than left pointing at a
 deleted document. The trash copy of B carries `mergedInto: <A's id>` alongside the usual
 `originalId`, so a merge is distinguishable from a plain delete.
+
+### Handing a task to ClickUp
+
+`openClickup(id)` opens a dialog that prepares two pieces of text and opens the destination
+list. It talks to nothing.
+
+**There is no API token, and there must not be one.** A ClickUp personal token grants access
+to everything its owner can see in the entire workspace. This page is served from a public
+URL, and it renders note bodies with `innerHTML` — so a token held anywhere in this page
+would be one sanitizer bypass away from POWER's ClickUp. Storing it in `meta/settings`
+does not help: the client reads it into the same JavaScript context. If a one-click
+integration is ever wanted, the token belongs in a small server-side proxy (a Cloudflare
+Worker or an Apps Script web app) that can only create tasks in one list, and the browser
+gets a low-value shared secret instead. Until then this stays a hand-over.
+
+The dialog offers, in order: the Area drop-down; the task title, read-only, with a Copy
+button, to paste into ClickUp's task-name field; the description block, with its own Copy
+button; and a field to paste the resulting ClickUp URL back. The primary button copies the
+title, opens the list in a new tab, and records the hand-over.
+
+`cuBodyText(t, area)` builds the description. Only sections with content are included, so a
+bare task does not arrive padded with empty headings: the note body flattened to plain text
+(`taskBodyText`, so a formatted note never arrives as markup), the action items as an
+**unticked** `- [ ]` checklist, a meta block (due date, sites, people, labels, Area,
+priority), and a `From WorkBoard` line.
+
+Two constants at the top of the section carry the destination: `CLICKUP_LIST_URL` /
+`CLICKUP_LIST_NAME` for the *NCS BO Team* list, and `CLICKUP_AREAS`, **a snapshot of that
+list's Area drop-down taken August 2026**. ClickUp is the source of truth; an Area added
+there cannot be chosen here until it is added to that array. Note also that the list carries
+*two* custom fields both named "Area" — this is the one with the emoji labels (Cooking,
+Scoping, Tech/AI, …), not the Delivery/Aftersales/NOC one.
+
+What it remembers: `clickupSent` and `clickupArea` on the task, the last Area used in
+`localStorage` (so a run of tasks for one Area does not mean re-picking it), and the ClickUp
+URL as an ordinary entry in `links` named `ClickUp` — reusing `links` rather than adding a
+field, so it shows as a chip, survives a backup and merges like any other link. A second
+save replaces the ClickUp link rather than piling up, and leaves other links alone.
+
+The list tab is opened *before* the Firestore write, so a slow or failed write cannot stop
+it. Clipboard access needs a secure context and a user gesture, so `copyText` falls back to
+the old `execCommand('copy')` path and reports failure rather than silently doing nothing.
 
 ### Pausing a task
 
@@ -509,13 +557,6 @@ changed, the payload documents have to be copied too.
 
 Confirmed by reading the source, not by guessing. Roughly ordered by impact. Referred to by
 name rather than number, so fixing one does not renumber the rest.
-
-**Grid cards render controls that CSS hides.**
-`taskCardHTML` emits a done checkbox and edit/note buttons, and `.card-check` /
-`.card-actions` are `display:none` with no hover rule to reveal them. Their `onclick`
-handlers were also malformed until August 2026; that is fixed, but the markup is still
-unreachable. Either add a `.task-card-grid:hover` rule to reveal them, or delete the markup.
-Not urgent: the card opens the detail modal, which offers the same actions.
 
 **The bottom navigation was dead markup until August 2026.**
 `.bottom-nav` was `display:none` in the base rule, and the only other rule mentioning it

@@ -105,6 +105,23 @@ behind. Nothing is scheduled server-side.
 August 2026 — it used to require a task to carry every selected value at once, which meant
 picking two sites usually returned nothing.
 
+## Sending a task to ClickUp
+
+**Detail modal → 📤 ClickUp.** Pick an Area, and the dialog hands you the two things
+ClickUp asks for: the task name, and a description block built from the note, the action
+items (as an unticked checklist), the due date, sites, people and labels. One button copies
+the name and opens the *NCS BO Team* list; paste the rest yourself. Paste the new task's URL
+back and it is kept as a link on the WorkBoard task, which then shows a 📤 chip.
+
+It is a hand-over, not an integration: **WorkBoard holds no ClickUp credentials and must not.**
+A ClickUp personal token reaches everything its owner can see in the whole workspace, and
+this page is public and renders note bodies as HTML — a token here would be one bug away
+from being a company-wide problem. A one-click version is possible, but the token has to
+live in a small server-side proxy, not in the browser. See ARCHITECTURE.md.
+
+The Area list in the code is a snapshot of ClickUp's, so a new Area added in ClickUp has to
+be added here too.
+
 ## Backup and restore
 
 **Settings → Data backup.** Export writes one JSON file containing tasks, trash, sites,
@@ -118,9 +135,11 @@ idempotent and safe to re-run. Older backup formats still load.
 
 ## Known defects
 
-1. **Grid cards render a checkbox and edit buttons that CSS hides.** `.card-check` and
-   `.card-actions` are `display:none` with no hover rule. Harmless — clicking the card opens
-   the detail modal, which has the same actions — but the markup is dead as it stands.
+Nothing currently known loses data. Two things worth having in mind, both detailed in
+ARCHITECTURE.md: every Firestore snapshot re-renders every list, which is the visible
+flicker on iPhone and the first thing to look at if the board ever feels slow; and Trash
+never expires, with a restore creating a new document id, so a pinned Today item does not
+follow its task back.
 
 Fixed in August 2026 and described in ARCHITECTURE.md:
 
@@ -145,5 +164,8 @@ Fixed in August 2026 and described in ARCHITECTURE.md:
   way to reach Today, Done, Filter or Settings at all.
 - Filters required a task to carry *every* selected site, person and label at once, so
   selecting two sites usually returned an empty board.
+- Grid cards emitted a checkbox and edit buttons that CSS hid with no hover rule — rendered,
+  never reachable. The markup is gone; the card opens the detail modal, which has both.
+- A merge silently dropped the surviving task's repeat rule.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.

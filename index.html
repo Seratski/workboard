@@ -124,8 +124,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .card-footer{margin-top:auto;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
 .card-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:auto;}
 .card-date.overdue{color:var(--red);}
-.card-actions{display:none;}
-.card-check{display:none;}
 .card-progress{height:2px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:2px;}
 .card-progress-fill{height:100%;background:var(--green);border-radius:2px;}
 .card-attach-count{font-size:10px;color:var(--text3);}
@@ -386,6 +384,12 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
 .pause-preset{display:flex;flex-wrap:wrap;gap:6px;}
 .pause-preset button{padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;transition:all .12s;}
 .pause-preset button:hover{border-color:var(--accent);color:var(--text);background:var(--bg4);}
+.task-clickup-chip{font-size:10px;font-family:var(--mono);color:var(--accent);background:var(--accent-glow);border:1px solid rgba(249,103,0,0.34);border-radius:5px;padding:1px 5px;}
+.cu-copy-row{display:flex;gap:8px;align-items:flex-start;}
+.cu-copy-row .form-input,.cu-copy-row textarea{flex:1;min-width:0;}
+.cu-copy-row .btn{flex-shrink:0;}
+.cu-pre{font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;resize:vertical;min-height:190px;}
+.cu-step{font-size:11px;color:var(--text3);margin-bottom:5px;}
 .task-paused-chip{font-size:10px;font-family:var(--mono);color:var(--teal);background:rgba(34,196,172,0.12);border:1px solid rgba(34,196,172,0.3);border-radius:5px;padding:1px 5px;}
 .fab{display:none;position:fixed;bottom:66px;right:16px;z-index:100;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(249,103,0,0.4);align-items:center;justify-content:center;}
 
@@ -768,6 +772,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       <button class="btn btn-primary btn-sm" id="detailEditBtn" onclick="editFromDetail()">✏️ Edit</button>
       <button class="btn btn-ghost btn-sm" id="detailRichBtn" onclick="richFromDetail()" style="display:none">📝 Open note</button>
       <button class="btn btn-ghost btn-sm" id="detailPauseBtn" onclick="openPause()">⏸️ Pause</button>
+      <button class="btn btn-ghost btn-sm" id="detailClickupBtn" onclick="openClickup()">📤 ClickUp</button>
       <button class="btn btn-ghost btn-sm" id="detailMergeBtn" onclick="openMergePicker()">🔀 Merge</button>
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
       <div class="check-box" id="detailCheck" style="margin-left:auto;width:18px;height:18px;" onclick="toggleDoneFromDetail()"></div>
@@ -801,7 +806,57 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
     </div>
     <div class="merge-foot">
       <button class="btn btn-ghost btn-sm" onclick="closePause()">Cancel</button>
-      <button class="btn btn-ghost btn-sm" id="pauseResumeBtn" onclick="resumeTask()" style="margin-left:auto;display:none;">▶ Resume now</button>
+      <button class="btn btn-ghost btn-sm" id="pauseResumeBtn" onclick="resumeTask()" style="margin-left:auto;display:none;">▶️ Resume now</button>
+    </div>
+  </div>
+</div>
+
+<!-- HAND A TASK OVER TO CLICKUP -->
+<!-- Deliberately has no API token and talks to nothing: it prepares the two pieces of text
+     and opens the list. See ARCHITECTURE.md, "Handing a task to ClickUp", for why. -->
+<div class="overlay hidden" id="clickupOverlay" onclick="if(event.target===this)closeClickup()">
+  <div class="merge-modal" style="max-width:560px;">
+    <div class="merge-head">
+      <div class="merge-head-title">📤 Send to ClickUp</div>
+      <div class="merge-head-sub" id="cuSub"></div>
+    </div>
+    <div class="merge-body">
+      <div class="merge-field">
+        <div class="merge-field-label">Area</div>
+        <select class="form-input" id="cuArea" onchange="cuRender()"></select>
+      </div>
+      <div class="merge-field">
+        <div class="merge-field-label">1 &middot; Task name</div>
+        <div class="cu-step">Paste this into the new task's name field.</div>
+        <div class="cu-copy-row">
+          <input class="form-input" id="cuTitle" readonly />
+          <button class="btn btn-ghost btn-sm" onclick="cuCopy('cuTitle',this)">Copy</button>
+        </div>
+      </div>
+      <div class="merge-field">
+        <div class="merge-field-label">2 &middot; Description</div>
+        <div class="cu-step">Then open the task and paste this into the description.</div>
+        <div class="cu-copy-row">
+          <textarea class="form-input cu-pre" id="cuBody" readonly></textarea>
+          <button class="btn btn-ghost btn-sm" onclick="cuCopy('cuBody',this)">Copy</button>
+        </div>
+      </div>
+      <div class="merge-field">
+        <div class="merge-field-label">3 &middot; Link it back (optional)</div>
+        <div class="cu-step">Paste the new task's ClickUp URL to keep a link on this task.</div>
+        <div class="cu-copy-row">
+          <input class="form-input" id="cuLink" placeholder="https://app.clickup.com/t/..." />
+          <button class="btn btn-ghost btn-sm" onclick="cuSaveLink()">Save link</button>
+        </div>
+      </div>
+      <div class="merge-note">
+        Nothing is sent anywhere: WorkBoard holds no ClickUp credentials, and it never will
+        while this page is public. It copies the text and opens the list; you create the task.
+      </div>
+    </div>
+    <div class="merge-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closeClickup()">Close</button>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="cuOpenList()">Copy name &amp; open the list</button>
     </div>
   </div>
 </div>
@@ -1655,18 +1710,17 @@ function taskCardHTML(t){
   var dateStr=t.date?'<span class="card-date'+(od?' overdue':'')+'">'+ formatDate(t.date)+(od?' ⚠':'')+'</span>':''  ;
   var h='<div class="task-card-grid '+(t.done?'done':'')+'" id="tc-'+t.id+'" onclick="openDetail(this)">';
   h+='<div class="card-stripe '+sc+'"></div>';
-  h+='<div class="card-check"><div class="check-box '+(t.done?'checked':'')+'" onclick="event.stopPropagation();toggleDone(\''+t.id+'\')"></div></div>';
   h+='<div class="card-title">'+escHtml(t.title||"(No title)")+'</div>';
   if(t.note)h+='<div class="card-note">'+escHtml(t.note)+'</div>';
   var commentBadgeCard=(t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'';
   h+='<div class="card-footer">'+(tags||'')+commentBadgeCard+dateStr+'</div>';
   if(actions.length)h+='<div class="card-progress"><div class="card-progress-fill" style="width:'+pct+'%"></div></div>';
   if(attachCount)h+='<span class="card-attach-count">📎 '+attachCount+'</span>';
-  h+='<div class="card-actions">';
-  if(t.richBody)h+='<button class="ia" onclick="event.stopPropagation();openRichEditor(\''+t.id+'\')">📝</button>';
-  h+='<button class="ia" onclick="event.stopPropagation();openEdit(\''+t.id+'\')">✏️</button>';
-
-  h+='</div></div>';
+  // No per-card checkbox or edit buttons: a grid card opens the detail modal, which has
+  // both. The markup used to be here but was hidden by CSS with no hover rule, so it was
+  // never reachable; it was deleted in August 2026 rather than revealed, because revealing
+  // it on hover would have done nothing on a phone.
+  h+='</div>';
   return h;
 }
 
@@ -1683,6 +1737,7 @@ function taskHTML(t){
   const richIcon=t.richBody?'<span style="font-size:10px;color:var(--text3);margin-left:2px">📝</span>':'';
   const pausedChip=isPaused(t)?'<span class="task-paused-chip">\u23f8\ufe0f '+formatDate(t.snoozedUntil)+'</span>':'';
   const repeatChip=(t.repeat&&t.repeat.unit&&t.repeat.unit!=='none')?'<span class="task-repeat-chip">\uD83D\uDD01 '+escHtml(repeatText(t.repeat))+'</span>':'';
+  const cuChip=t.clickupSent?'<span class="task-clickup-chip">\uD83D\uDCE4 ClickUp'+(t.clickupArea?' \u00b7 '+escHtml(t.clickupArea):'')+'</span>':'';
   var isPinned=todayFocus.some(function(x){return x.id===t.id;});
   return '<div class="task-row-wrap '+(t.done?'done':'')+' '+(isPinned?'is-pinned':'')+' " id="tc-'+t.id+'" onclick="openDetail(this)" style="cursor:pointer">'
     +'<div class="task-stripe '+sc+'"></div>'
@@ -1692,8 +1747,8 @@ function taskHTML(t){
         +'<span class="task-title">'+escHtml(t.title||'(No title)')+richIcon+'</span>'
         +(t.done?'':'<button class="pin-btn'+(isPinned?' pinned':'')+'" data-tid="'+t.id+'" onclick="event.stopPropagation();pinTodayClick(this)" title="'+(isPinned?'In Today list':'Add to Today')+'">📌</button>')
       +'</div>'
-      +(tags||t.date||pausedChip||repeatChip||(t.links&&t.links.length)||(t.comments&&t.comments.length)?'<div class="task-tags-row">'+tags
-      +pausedChip+repeatChip+((t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'')+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'" >'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+(t.links&&t.links.length?t.links.map(function(l){return '<a class="task-link-chip" href="'+escHtml(l.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 '+escHtml(l.name)+'</a>';}).join(''):'')+'</div>':'')
+      +(tags||t.date||pausedChip||repeatChip||cuChip||(t.links&&t.links.length)||(t.comments&&t.comments.length)?'<div class="task-tags-row">'+tags
+      +pausedChip+repeatChip+cuChip+((t.comments&&t.comments.length)?'<span class="comment-badge" id="cb-'+t.id+'" onmouseenter="showTaskTooltip(this,\''+t.id+'\')" onmouseleave="hideTaskTooltip()">💬 '+t.comments.length+'</span>':'')+(t.date?'<span class="task-date-inline'+(isOverdue(t.date)?' overdue':'')+'" >'+formatDate(t.date)+(isOverdue(t.date)?' ⚠':'')+'</span>':'')+(t.links&&t.links.length?t.links.map(function(l){return '<a class="task-link-chip" href="'+escHtml(l.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 '+escHtml(l.name)+'</a>';}).join(''):'')+'</div>':'')
       +(t.note?'<div class="task-note-row" onclick="toggleNote(this)" title="Click to expand">'+escHtml(t.note)+'</div>':'')
       +actionBar
       +attachHTML(t)
@@ -2909,6 +2964,156 @@ async function resumeTask(){
   await resumeTaskById(id);
 }
 
+// -- HAND A TASK OVER TO CLICKUP --
+// One-way and credential-free by design. A ClickUp personal token grants access to
+// everything its owner can see in the whole workspace, and this page is served from a
+// public URL and renders note bodies with innerHTML -- so a token here would be one
+// sanitizer bypass away from POWER's ClickUp. Instead WorkBoard prepares the text and
+// opens the list; the task is created by hand. What it does remember is that a task was
+// handed over, which Area was chosen, and the resulting ClickUp link.
+const CLICKUP_LIST_URL='https://app.clickup.com/4575366/v/l/li/901202525470';
+const CLICKUP_LIST_NAME='NCS BO Team';
+// A snapshot of the Area drop-down on that list, taken August 2026. ClickUp is the source
+// of truth: if someone adds an Area there, add it here too or it cannot be chosen.
+const CLICKUP_AREAS=['👨‍🍳 Cooking','🌱 Scoping','🦉 Learning','📖 Routines/BDAs',
+  '🚀 Nexus','✨ Viva Engage','👨‍💻 Tech/AI','📈 Analytics','📑 Concepts',
+  '⚙️ Operation/GCSM','💡 Continuous Improvement','🚗 Parked (Final Destination)',
+  '📒 SOP/Concepts','🤖 AI Operations','🎯 BO Excellence','✈️ On Route'];
+
+let clickupTaskId=null;
+
+function openClickup(id){
+  var t=tasks.find(function(x){return x.id===(id||detailTaskId);});
+  if(!t){showToast('Task not found');return;}
+  clickupTaskId=t.id;
+  document.getElementById('cuSub').innerHTML=escHtml(t.title||'(No title)')
+    +' → <strong>'+escHtml(CLICKUP_LIST_NAME)+'</strong>'
+    +(t.clickupSent?'<br><span style="color:var(--accent)">Already sent '+formatDate(t.clickupSent)
+      +(t.clickupArea?' as '+escHtml(t.clickupArea):'')+'</span>':'');
+  var sel=document.getElementById('cuArea');
+  sel.innerHTML='<option value="">— no Area —</option>'+CLICKUP_AREAS.map(function(a){
+    return '<option value="'+esc(a)+'">'+escHtml(a)+'</option>';}).join('');
+  // Offer the Area this task went out as last time, then the last one used at all, so a
+  // run of tasks for the same Area does not mean re-picking it every time.
+  sel.value=t.clickupArea||localStorage.getItem('wb_clickup_area')||'';
+  var existing=(t.links||[]).find(function(l){return /clickup\.com/i.test(l.url||'');});
+  document.getElementById('cuLink').value=existing?existing.url:'';
+  cuRender();
+  document.getElementById('clickupOverlay').classList.remove('hidden');
+}
+
+function closeClickup(){
+  document.getElementById('clickupOverlay').classList.add('hidden');
+  clickupTaskId=null;
+}
+
+// The description block. Only lines that have something to say are included, so a bare
+// task does not arrive in ClickUp padded with empty headings.
+function cuBodyText(t,area){
+  var body=(taskBodyText(t)||'').trim();
+  var meta=[];
+  if(t.date)meta.push('Due: '+formatDate(t.date));
+  if((t.sites||[]).length)meta.push('Sites: '+t.sites.join(', '));
+  if((t.persons||[]).length)meta.push('People: '+t.persons.join(', '));
+  if((t.tags||[]).length)meta.push('Labels: '+t.tags.join(', '));
+  if(area)meta.push('Area: '+area);
+  if(t.priority&&t.priority!=='none')meta.push('Priority: '+t.priority);
+  var actions=(t.actions||[]).filter(function(a){return a.text;});
+  var parts=[];
+  if(body)parts.push(body);
+  if(actions.length)parts.push(actions.map(function(a){
+    return '- [ ] '+a.text+(a.assignee?' ('+a.assignee+')':'');}).join('\n'));
+  if(meta.length)parts.push(meta.join('\n'));
+  parts.push('From WorkBoard');
+  return parts.join('\n\n');
+}
+
+function cuRender(){
+  var t=tasks.find(function(x){return x.id===clickupTaskId;});
+  if(!t)return;
+  var area=document.getElementById('cuArea').value;
+  document.getElementById('cuTitle').value=t.title||'';
+  document.getElementById('cuBody').value=cuBodyText(t,area);
+}
+
+async function cuCopy(fieldId,btn){
+  var el=document.getElementById(fieldId);
+  var text=el.value||'';
+  if(!text){showToast('Nothing to copy');return;}
+  var ok=await copyText(text);
+  if(!ok){showToast('Could not copy — select the text and copy it by hand');return;}
+  if(btn){
+    var was=btn.textContent;
+    btn.textContent='Copied ✓';
+    setTimeout(function(){btn.textContent=was;},1400);
+  }
+}
+
+// Clipboard access needs a secure context and a user gesture, and neither is guaranteed.
+// Fall back to the old execCommand path rather than failing silently.
+async function copyText(text){
+  try{
+    if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text);return true;}
+  }catch(e){}
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=text;
+    ta.setAttribute('readonly','');
+    ta.style.position='fixed';ta.style.top='-1000px';ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok=document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){return false;}
+}
+
+async function cuOpenList(){
+  var id=clickupTaskId;
+  var t=tasks.find(function(x){return x.id===id;});
+  if(!t)return;
+  var area=document.getElementById('cuArea').value;
+  var copied=await copyText(t.title||'');
+  // Opened before the write: a slow or failed Firestore write should not stop the tab.
+  window.open(CLICKUP_LIST_URL,'_blank','noopener');
+  try{localStorage.setItem('wb_clickup_area',area);}catch(e){}
+  try{
+    await db.collection('tasks').doc(id).update({
+      clickupSent:todayStr(),
+      clickupArea:area,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast(copied?'Name copied — paste it in ClickUp':'ClickUp opened — copy the name from the dialog');
+  }catch(e){
+    showToast('Opened, but could not record it: '+(e.code||e.message||'error'));
+  }
+}
+
+async function cuSaveLink(){
+  var id=clickupTaskId;
+  var t=tasks.find(function(x){return x.id===id;});
+  if(!t)return;
+  var url=(document.getElementById('cuLink').value||'').trim();
+  if(!url){showToast('Paste the ClickUp link first');return;}
+  if(!/^https?:\/\//i.test(url))url='https://'+url;
+  if(!/clickup\.com/i.test(url)){showToast('That does not look like a ClickUp link');return;}
+  var links=JSON.parse(JSON.stringify(t.links||[]));
+  var ix=links.findIndex(function(l){return /clickup\.com/i.test(l.url||'');});
+  var entry={name:'ClickUp',url:url};
+  if(ix>=0)links[ix]=entry; else links.push(entry);
+  try{
+    await db.collection('tasks').doc(id).update({
+      links:links,
+      clickupSent:t.clickupSent||todayStr(),
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Linked ✓');
+    closeClickup();
+  }catch(e){
+    showToast('Could not save the link: '+(e.code||e.message||'error'));
+  }
+}
+
 // -- BACKUP: EXPORT / IMPORT --
 // v1 envelope. The pre-v1 export was a flat {tasks,sites,persons,projectTasks} object with
 // no trash, Today list or defaults; normalizeBackup still accepts those files.
@@ -3339,6 +3544,18 @@ function openDetail(elOrId) {
       + '</div></div>';
   }
 
+  if (t.clickupSent) {
+    var cuLink=(t.links||[]).find(function(l){return /clickup\.com/i.test(l.url||'');});
+    body += '<div class="detail-section">'
+      + '<div class="detail-section-label">ClickUp</div>'
+      + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:13px;color:var(--text2);">'
+        + '<span class="task-clickup-chip">\uD83D\uDCE4 sent ' + formatDate(t.clickupSent)
+        + (t.clickupArea?' \u00b7 '+escHtml(t.clickupArea):'') + '</span>'
+        + (cuLink?'<a href="'+escHtml(cuLink.url)+'" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px;">open in ClickUp \u2197</a>':'')
+        + '<button class="btn btn-ghost btn-sm" onclick="openClickup()">Send again</button>'
+      + '</div></div>';
+  }
+
   if (isPaused(t)) {
     body += '<div class="detail-section">'
       + '<div class="detail-section-label">Paused</div>'
@@ -3701,7 +3918,13 @@ function buildMergedData(a,b,c){
       var pa=isPaused(a)?a.snoozedUntil:'', pb=isPaused(b)?b.snoozedUntil:'';
       if(pa&&pb)return pa<pb?pa:pb;
       return pa||pb||'';
-    })()
+    })(),
+    // A survives the merge, so its rule wins; B's is picked up only if A had none.
+    // Without this a merge silently dropped the repeat rule from the surviving task.
+    repeat:(a.repeat&&a.repeat.unit&&a.repeat.unit!=='none')?JSON.parse(JSON.stringify(a.repeat))
+          :((b.repeat&&b.repeat.unit&&b.repeat.unit!=='none')?JSON.parse(JSON.stringify(b.repeat)):null),
+    clickupSent:a.clickupSent||b.clickupSent||'',
+    clickupArea:a.clickupSent?(a.clickupArea||''):(b.clickupArea||'')
   };
   // Keep the long form in richBody so it opens in the note editor; note stays the preview.
   if(isHtml){
@@ -4189,6 +4412,10 @@ window.addEventListener('popstate', function(e) {
   if (!document.getElementById('lightbox').classList.contains('hidden')) {
     closeLightbox(); history.pushState(null,'',location.href); return;
   }
+  if (!document.getElementById('clickupOverlay').classList.contains('hidden')) {
+    closeClickup();
+    return;
+  }
   if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
     closePause(); history.pushState(null,'',location.href); return;
   }
@@ -4222,6 +4449,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     // the lightbox sits above everything, so it closes first
     if(!document.getElementById('lightbox').classList.contains('hidden')){closeLightbox();return;}
+    if(!document.getElementById('clickupOverlay').classList.contains('hidden')){closeClickup();return;}
     if(!document.getElementById('pauseOverlay').classList.contains('hidden')){closePause();return;}
     if(!document.getElementById('importOverlay').classList.contains('hidden')){closeImport();return;}
     if(!document.getElementById('mergePreviewOverlay').classList.contains('hidden')){closeMergePreview();return;}
