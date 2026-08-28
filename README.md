@@ -107,7 +107,8 @@ picking two sites usually returned nothing.
 
 ## Links, and mail from Outlook
 
-Open a task and paste a URL into the **Links** field — no need to open it for edit. An
+Paste a URL into the **Links** field — on the create screen while you are typing the task,
+or on an existing task by opening it; either way, no trip through Edit. An
 Outlook or OWA link is recognised and labelled **📧 Mail**, with its own colour on the
 task row, so a thread you have to go back and read stands out from an ordinary reference.
 
@@ -123,7 +124,8 @@ open. Attachments are capped at 700 KB each and accept images and PDFs.
 
 ## Sending a task to ClickUp
 
-**Detail modal → 📤 ClickUp.** Pick an Area, and the dialog hands you the two things
+**📤 Save & ClickUp** while creating the task, or **📤 ClickUp** in the detail modal for one
+that already exists. Pick an Area, and the dialog hands you the two things
 ClickUp asks for: the task name, and a description block built from the note, the action
 items (as an unticked checklist), the due date, sites, people and labels. One button copies
 the name and opens the *NCS BO Team* list; paste the rest yourself. Paste the new task's URL
@@ -187,5 +189,8 @@ Fixed in August 2026 and described in ARCHITECTURE.md:
   so a crafted link URL could have added an attribute of its own.
 - Links could only be added by opening a task for edit; the detail modal had the CSS for a
   Links section but never rendered one.
+- A new task could not be handed to ClickUp while being created — you had to save it, find
+  it again and open it. Both editors now have a Save & ClickUp button.
+- The upload zone claimed a 500 KB limit; the code has always enforced 700 KB.
 
 Full detail, plus the smaller issues and dead code, in ARCHITECTURE.md.

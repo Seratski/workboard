@@ -742,12 +742,12 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       </div>
     </div>
     <div class="form-field">
-      <label class="form-label">Links <span class="form-hint">name + URL</span></label>
+      <label class="form-label">Links <span class="form-hint">paste a link — an Outlook mail link is recognised</span></label>
       <div id="modalLinksList"></div>
       <div class="link-add-row">
         <input class="form-input" id="modalLinkName" placeholder="Link name (e.g. Power DK)" />
         <div class="row2">
-          <input class="form-input" id="modalLinkUrl" placeholder="https://…" style="flex:1;" />
+          <input class="form-input" id="modalLinkUrl" placeholder="https://… — or Label | https://…" style="flex:1;" />
           <button class="btn btn-ghost btn-sm" onclick="addModalLink()" style="flex-shrink:0;">+ Add</button>
         </div>
       </div>
@@ -756,13 +756,14 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
       <label class="form-label">Attachments <span class="form-hint">paste screenshot or upload file</span></label>
       <div class="attach-preview" id="modalAttachPreview"></div>
       <div class="attach-zone" id="modalAttachZone" onclick="document.getElementById('modalFileInput').click()" ondragover="handleDragOver(event,'modalAttachZone')" ondragleave="handleDragLeave('modalAttachZone')" ondrop="handleDrop(event,'modal')">
-        📎 Click to upload or drag & drop — PNG, JPG, PDF (max 500KB each)
+        📎 Click to upload or drag & drop — PNG, JPG, PDF (max 700KB each)
       </div>
       <input type="file" id="modalFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(event,'modal')" />
       <div class="paste-hint">💡 Tip: Ctrl+V to paste a screenshot directly</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-ghost" onclick="saveTaskAndClickup()" title="Save, then prepare it for the NCS BO Team list">📤 Save &amp; ClickUp</button>
       <button class="btn btn-primary" onclick="saveTask()">💾 Save task</button>
     </div>
   </div>
@@ -1067,6 +1068,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
           </div>
           <div class="rich-footer">
             <button class="btn btn-primary btn-sm" onclick="saveRichTask()">💾 Save to Board</button>
+            <button class="btn btn-ghost btn-sm" onclick="saveRichTaskAndClickup()" title="Save, then prepare it for the NCS BO Team list">📤 Save &amp; ClickUp</button>
             <button class="btn btn-danger btn-sm" onclick="deleteRichDraft()">🗑 Discard</button>
             <span style="font-size:11px;color:var(--text3);margin-left:auto" id="richTaskStatus"></span>
           </div>
@@ -1128,7 +1130,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.5) sepia(1
             <div class="link-add-row">
               <input class="form-input" id="richLinkName" placeholder="Link name (e.g. Power DK)" />
               <div class="row2">
-                <input class="form-input" id="richLinkUrl" placeholder="https://…" style="flex:1;" />
+                <input class="form-input" id="richLinkUrl" placeholder="https://… — or Label | https://…" style="flex:1;" />
                 <button class="btn btn-ghost btn-sm" onclick="addRichLink()" style="flex-shrink:0;">+ Add</button>
               </div>
             </div>
@@ -2184,12 +2186,16 @@ function closeModal(){
   document.getElementById('taskOverlay').classList.add('hidden');
   editingId=null;
 }
+// Returns the task's id -- the existing one when editing, the new one when creating, and
+// null when nothing was saved. "Save & ClickUp" needs it: you cannot hand over a task that
+// does not exist yet.
 async function saveTask(){
-  const title=document.getElementById('fTitle').value.trim();if(!title){document.getElementById('fTitle').focus();return;}
+  const title=document.getElementById('fTitle').value.trim();if(!title){document.getElementById('fTitle').focus();return null;}
   await persistAttachments(modalAttachments);
   const data={title,note:document.getElementById('fNote').value.trim(),priority:document.getElementById('fPriority').value,date:document.getElementById('fDate').value,sites:[...fSites],persons:[...fPersons],tags:[...fProjects],actions:JSON.parse(JSON.stringify(fActions)),links:JSON.parse(JSON.stringify(fLinks)),attachments:attachForTask(modalAttachments),repeat:readRepeat('f'),done:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
   const newPTs=fProjects.filter(p=>!projectTasks.includes(p));
   if(newPTs.length)await db.collection('meta').doc('projectTasks').set({list:[...projectTasks,...newPTs]});
+  var savedId=editingId&&editingId!=='saved'?editingId:null;
   if(editingId){
   const existingTask=tasks.find(x=>x.id===editingId);
   const hist=JSON.parse(JSON.stringify((existingTask&&existingTask.history)||[]));
@@ -2200,12 +2206,22 @@ async function saveTask(){
   else{
   data.createdAt=firebase.firestore.FieldValue.serverTimestamp();
   data.history=[{type:'created',time:Date.now()}];
-  await db.collection('tasks').add(data);showToast('Saved ✓');
+  var ref=await db.collection('tasks').add(data);savedId=ref.id;showToast('Saved ✓');
 }
   try{localStorage.removeItem('wb_task_draft');}catch(e){}
   await flushAttachDeletes();
   editingId='saved'; // prevents closeModal from re-saving draft
   closeModal();
+  return savedId?{id:savedId,data:data}:null;
+}
+
+// Save, then hand the task straight over to ClickUp. Without this the only way to reach
+// the ClickUp dialog was to save, find the task again and open it -- for a task you had
+// just finished typing.
+async function saveTaskAndClickup(){
+  var saved=await saveTask();
+  if(!saved)return;
+  openClickup(saved.id,Object.assign({id:saved.id},saved.data));
 }
 
 // -- RICH TASK EDITOR --
@@ -2430,9 +2446,10 @@ async function richFlush(){
   setTimeout(function(){if(!richDirty)richStatus('');},2500);
 }
 
+// Returns {id, data} like saveTask, or null when nothing was saved.
 async function saveRichTask(){
   const title=document.getElementById('richTitle').value.trim();
-  if(!title){document.getElementById('richTitle').focus();showToast('Add a title first');return;}
+  if(!title){document.getElementById('richTitle').focus();showToast('Add a title first');return null;}
   clearTimeout(richAutoSaveTimer);
   richDirty=false; // an explicit save supersedes any pending autosave
   const newPTs=rProjects.filter(p=>!projectTasks.includes(p));
@@ -2454,6 +2471,7 @@ async function saveRichTask(){
     done:false,
     updatedAt:firebase.firestore.FieldValue.serverTimestamp()
   };
+  var newRichId=null;
   if(richEditingId){
     const existingRich=tasks.find(x=>x.id===richEditingId);
     const richHist=JSON.parse(JSON.stringify((existingRich&&existingRich.history)||[]));
@@ -2464,12 +2482,21 @@ async function saveRichTask(){
   }else{
     data.createdAt=firebase.firestore.FieldValue.serverTimestamp();
     data.history=[{type:'created',time:Date.now()}];
-    await db.collection('tasks').add(data);
+    var richRef=await db.collection('tasks').add(data);
+    newRichId=richRef.id;
     clearRichDraft();
     showToast('Task saved to Board \u2713');
   }
   await flushAttachDeletes();
+  var savedRichId=richEditingId||newRichId;
   closeRichEditor();
+  return savedRichId?{id:savedRichId,data:data}:null;
+}
+
+async function saveRichTaskAndClickup(){
+  var saved=await saveRichTask();
+  if(!saved)return;
+  openClickup(saved.id,Object.assign({id:saved.id},saved.data));
 }
 function deleteRichDraft(){
   if(richEditingId){if(!confirm('Delete this task?'))return;db.collection('tasks').doc(richEditingId).delete();showToast('Deleted');}
@@ -3061,11 +3088,20 @@ const CLICKUP_AREAS=['👨‍🍳 Cooking','🌱 Scoping','🦉 Learning','📖 
   '📒 SOP/Concepts','🤖 AI Operations','🎯 BO Excellence','✈️ On Route'];
 
 let clickupTaskId=null;
+// A task saved a moment ago is not in `tasks` until its snapshot arrives, so the dialog
+// keeps the data it was handed and falls back to it. Once the snapshot lands, the live
+// task wins, which is what makes "Send again" show the recorded hand-over.
+let clickupTaskFallback=null;
+function cuTask(){
+  return tasks.find(function(x){return x.id===clickupTaskId;})||clickupTaskFallback;
+}
 
-function openClickup(id){
-  var t=tasks.find(function(x){return x.id===(id||detailTaskId);});
+function openClickup(id,fallbackTask){
+  var wanted=id||detailTaskId;
+  var t=tasks.find(function(x){return x.id===wanted;})||(fallbackTask&&fallbackTask.id===wanted?fallbackTask:null);
   if(!t){showToast('Task not found');return;}
   clickupTaskId=t.id;
+  clickupTaskFallback=fallbackTask||null;
   document.getElementById('cuSub').innerHTML=escHtml(t.title||'(No title)')
     +' → <strong>'+escHtml(CLICKUP_LIST_NAME)+'</strong>'
     +(t.clickupSent?'<br><span style="color:var(--accent)">Already sent '+formatDate(t.clickupSent)
@@ -3085,6 +3121,7 @@ function openClickup(id){
 function closeClickup(){
   document.getElementById('clickupOverlay').classList.add('hidden');
   clickupTaskId=null;
+  clickupTaskFallback=null;
 }
 
 // The description block. Only lines that have something to say are included, so a bare
@@ -3109,7 +3146,7 @@ function cuBodyText(t,area){
 }
 
 function cuRender(){
-  var t=tasks.find(function(x){return x.id===clickupTaskId;});
+  var t=cuTask();
   if(!t)return;
   var area=document.getElementById('cuArea').value;
   document.getElementById('cuTitle').value=t.title||'';
@@ -3150,7 +3187,7 @@ async function copyText(text){
 
 async function cuOpenList(){
   var id=clickupTaskId;
-  var t=tasks.find(function(x){return x.id===id;});
+  var t=cuTask();
   if(!t)return;
   var area=document.getElementById('cuArea').value;
   var copied=await copyText(t.title||'');
@@ -3171,7 +3208,7 @@ async function cuOpenList(){
 
 async function cuSaveLink(){
   var id=clickupTaskId;
-  var t=tasks.find(function(x){return x.id===id;});
+  var t=cuTask();
   if(!t)return;
   var url=(document.getElementById('cuLink').value||'').trim();
   if(!url){showToast('Paste the ClickUp link first');return;}

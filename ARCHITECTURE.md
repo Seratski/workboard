@@ -463,7 +463,8 @@ deleted document. The trash copy of B carries `mergedInto: <A's id>` alongside t
 Links live on the task as `links: [{name, url}]` and are added in three places: the quick
 modal, the note editor, and — since August 2026 — **the detail modal**, which is the one
 that matters in practice, because pasting a URL onto an existing task used to mean opening
-it for edit. The detail modal's Links section renders every link with a remove button and
+it for edit. All three go through the same `parseLinkInput`, so the whole task can be
+finished on the create screen: link, repeat rule and ClickUp hand-over included. The detail modal's Links section renders every link with a remove button and
 an add field, and is shown even when the task has no links, since the add field is the
 point.
 
@@ -499,8 +500,17 @@ file and accept `image/*` and `.pdf` only.
 
 ### Handing a task to ClickUp
 
-`openClickup(id)` opens a dialog that prepares two pieces of text and opens the destination
-list. It talks to nothing.
+`openClickup(id, fallbackTask)` opens a dialog that prepares two pieces of text and opens
+the destination list. It talks to nothing.
+
+**Reachable while creating a task, not only afterwards.** Both editors have a
+*Save & ClickUp* button: `saveTaskAndClickup()` and `saveRichTaskAndClickup()` save, then
+open the dialog for the task that was just written. For that, `saveTask()` and
+`saveRichTask()` return `{id, data}` — the existing id when editing, the new one when
+creating, `null` when nothing was saved (an empty title leaves the editor open and writes
+nothing). A task saved a moment ago is not in `tasks` until its snapshot arrives, so the
+dialog is handed that data as `fallbackTask` and `cuTask()` prefers the live task when it
+appears. A fallback whose id does not match the one asked for is ignored.
 
 **There is no API token, and there must not be one.** A ClickUp personal token grants access
 to everything its owner can see in the entire workspace. This page is served from a public
